@@ -14,7 +14,7 @@ source("./R_scripts/CPC.R")
 source("./R_scripts/inference.R")
 source("./R_scripts/KFCS.R")
 
-lambda_2_vals <- seq(0.05, 0.07, by = 0.0002)
+lambda_2_vals <- seq(0.04, 0.08, by = 0.0001)
 
 MLE_df <- readRDS("./saved_objects/inference/MLE/MLE_estimate.rds")
 
