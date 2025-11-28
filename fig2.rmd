@@ -33,6 +33,7 @@ source("./R_scripts/follow_up.R")
 source("./R_scripts/KFCS.R")
 source("./R_scripts/inference.R")
 source("./R_scripts/NMC.R")
+source("./R_scripts/plots_paper.R")
 #source("./R_scripts/utils.R")
 
 NMC_all  <- "#59979C"
@@ -530,7 +531,7 @@ CPC_avg_titre <- CPC_titre |> group_by(age) |> summarise(mean = mean(log2_mean))
 
 NMC_avg_titre <- plac_df |> group_by(age) |> summarise(mean = mean(log2_mean))
 
-KFCS_titre <- KFCS_get_titre_data() |> filter(age >= 2)
+KFCS_titre_df <- KFCS_get_titre_data() |> filter(age >= 2)
 
 KFCS_avg_titre <- KFCS_titre |> group_by(age) |> 
   summarise(mean = mean(log2_mean))

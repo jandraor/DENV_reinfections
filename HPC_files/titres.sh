@@ -11,7 +11,7 @@
 #SBATCH -p icelake
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=60
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --ntasks=1
 #! How much wallclock time will be required?
 #SBATCH --time=24:00:00

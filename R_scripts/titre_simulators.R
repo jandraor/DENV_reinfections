@@ -83,9 +83,16 @@ simulate_titres_scenarios <- function(damp_df)
 
     if(!file.exists(fn))
     {
-      inf_df <- inf_df |> mutate(chunk_id = (subject_id - 1) %/% 1000)
+      s_ids <- inf_df$subject_id |> unique() |>
+        sample(100000)
+
+      inf_df <- inf_df |>
+        filter(subject_id %in% s_ids)|>
+        mutate(chunk_id = (subject_id - 1) %/% 1000)
 
       chunk_list <- split(inf_df, inf_df$chunk_id)
+
+      plan(multisession, workers = future::availableCores() - 1)
 
       sim_pack <- map_df(chunk_list, simulate_titres_from_histories,
                          damp_df = damp_df)
@@ -106,8 +113,6 @@ simulate_titres_from_histories <- function(infection_history_df, damp_df) {
   sce_lbl <- unique(infection_history_df$scenario_lbl)
 
   sim_decay_rate <- damp_df$decay_rate
-
-  plan(multisession, workers = future::availableCores() - 1)
 
   titres_df <- future_map_dfr(
     df_list,
