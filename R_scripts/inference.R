@@ -58,7 +58,37 @@ loglik_2_cohorts <- function(pars, data_df1, data_df2,
   ll_1 + ll_2
 }
 
-find_MLE <- function(CPC_age_inf_df, KFCS_age_inf_df, final_age_1, final_age_2)
+find_MLE <- function(start_list, titre_data_list, age_inf_data_list,
+                     final_age_vctr)
+{
+  future_imap(start_list, \(start_obj, id) {
+
+    fn <- str_glue("./saved_objects/inference/opt_{id}.rds")
+
+    if(!file.exists(fn))
+    {
+      par_vctr <- unlist(start_obj, use.names = TRUE)
+
+      res <- nloptr(
+        x0                = par_vctr,
+        eval_f            = log_lik_titre_prob_inf,
+        titre_data_list   = titre_data_list,
+        age_inf_data_list = age_inf_data_list,
+        final_age_vctr    = final_age_vctr,
+        n_indiv           = 1e4,
+        opts = list(algorithm = "NLOPT_LN_SBPLX",
+                    maxeval   = 20000,
+                    xtol_rel  = 1e-8,
+                    ftol_rel  = 1e-10))
+
+      saveRDS(res, fn)
+    } else res <- readRDS(fn)
+
+    res
+  })
+}
+
+find_MLE_old <- function(CPC_age_inf_df, KFCS_age_inf_df, final_age_1, final_age_2)
 {
   set.seed(1645)
 

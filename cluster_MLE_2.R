@@ -64,30 +64,7 @@ start_list <- transpose(start_df)
 
 plan(multisession, workers = availableCores())
 
-res_list <- future_imap(start_list, \(start_obj, id) {
-
-  fn <- str_glue("./saved_objects/inference/opt_{id}.rds")
-
-  if(!file.exists)
-  {
-    par_vctr <- unlist(start_obj, use.names = TRUE)
-
-    res <- nloptr(
-      x0                = par_vctr,
-      eval_f            = log_lik_titre_prob_inf,
-      titre_data_list   = titre_data_list,
-      age_inf_data_list = age_inf_data_list,
-      final_age_vctr    = final_age_vctr,
-      n_indiv           = 1e4,
-      opts = list(algorithm = "NLOPT_LN_SBPLX",
-                  maxeval   = 20000,
-                  xtol_rel  = 1e-8,
-                  ftol_rel  = 1e-10))
-
-    saveRDS(res, fn)
-  } else res <- readRDS(fn)
-
-  res
-})
+res_list <- find_MLE(start_list, titre_data_list,
+                     age_inf_data_list, final_age_vctr)
 
 plan(sequential)
