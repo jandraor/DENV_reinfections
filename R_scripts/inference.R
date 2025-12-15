@@ -204,4 +204,107 @@ run_profile_optim <- function(par_value, iter, par_name, MLE_vals, fixed_pos,
   df
 }
 
+estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
+                                      phi, beta, cohort_batches, final_age)
+{
 
+  titres_df <- future_map_dfr(cohort_batches, \(batch) {
+
+    cohort_df <- split(batch, batch$subject_id)
+
+    map_df(cohort_df, \(subject_df) {
+
+      inf_times <- subject_df$age
+      inf_times <- inf_times[inf_times <= final_age]
+      s_id      <- unique(subject_df$subject_id)
+
+      simulate_DENV_long_decay_titres(inf_times,
+                                log_first_peak = log_first_peak,
+                                decay_rate     = decay_rate,
+                                phi            = phi,
+                                beta           = beta,
+                                subject_id     = s_id,
+                                final_age      = final_age)
+    })
+  })
+
+  avg_df <- titres_df |>
+    mutate(titre      = ifelse(titre < 10, 5, titre),
+           log2_titre = log2_transform(titre)) |>
+    group_by(age) |>
+    summarise(mean = mean(log2_titre),
+              .groups = "drop")
+
+  avg_df
+}
+
+log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
+                                   final_age_vctr, n_indiv)
+{
+  # Infection parameters-------------------
+  lambdas <- inv.logit(pars[1:2])
+  rho     <- inv.logit(pars[[3]])
+
+  # Decay rate dynamics--------------------
+  r_1        <- inv.logit(pars[[4]])
+  decay_rate <- r_1 * exp(-0:3)
+
+  # Peak dynamics--------------------------
+  log_A0  <- exp(pars[[5]])
+  phi     <- exp(pars[[6]])
+  beta    <- 1
+
+  sd_vals <- exp(pars[7:8])
+
+  set.seed(1150)
+
+  inf_list <- lapply(1:2, \(cohort_idx) {
+
+    simulate_DENV_infections_since_birth(
+      lambda_serotype   = lambdas[[cohort_idx]],
+      loss_rate         = rho,
+      final_age         = final_age_vctr[[cohort_idx]],
+      n_individuals     = n_indiv) |>
+      rename(subject_id = infected_ind)
+  })
+
+  ll_age_inf <- sapply(1:2, \(cohort_idx) {
+
+    inf_df       <- inf_list[[cohort_idx]]
+    age_inf_data <- age_inf_data_list[[cohort_idx]]
+
+    prob_inf_age <- inf_df |> group_by(age) |> count() |>
+      mutate(pct = n / n_indiv)
+
+    dbinom(x    = age_inf_data$n_infections,
+           size = age_inf_data$n_individuals,
+           prob = prob_inf_age$pct[-1],
+           log  = TRUE) |> sum()
+  }) |> sum()
+
+  ll_titre <- sapply(1:2, \(cohort_idx) {
+
+    inf_df <- inf_list[[cohort_idx]]
+    cohort_batches <- split(inf_df, inf_df$subject_id %% 2000 + 1)
+
+    avg_titre_df <- estimate_avg_titre_by_age(
+      log_first_peak = log_A0,
+      decay_rate     =  decay_rate,
+      phi            = phi,
+      beta           = beta,
+      cohort_batches = cohort_batches,
+      final_age      =  final_age_vctr[[cohort_idx]])
+
+    titre_df <- titre_data_list[[cohort_idx]]
+
+    dnorm(x    = titre_df $mean,
+          mean = avg_titre_df$mean[-1],
+          sd   = sd_vals[[cohort_idx]] / sqrt(titre_df$n), log = TRUE) |>
+      sum()
+  }) |> sum()
+
+
+  ll <- ll_age_inf + ll_titre
+
+  -ll
+}
