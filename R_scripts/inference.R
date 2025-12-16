@@ -12,62 +12,26 @@ approximate_prob_inf_at_age <- function(lambda_serotype,
     mutate(pct = n / n_individuals)
 }
 
-loglik_fun <- function(pars, data_df, final_age)
-{
-  lambda_val    <- inv.logit(pars[[1]])
-  loss_rate_val <- inv.logit(pars[[2]])
 
-  age_prob_df <- approximate_prob_inf_at_age(lambda_val,
-                                             loss_rate_val,
-                                             n_individuals = 1e5,
-                                             final_age)
-  -sum(dbinom(x    = data_df$n_infections,
-              size = data_df$n_individuals,
-              prob = age_prob_df$pct[-1],log = TRUE))
-
-}
-
-loglik_2_cohorts <- function(pars, data_df1, data_df2,
-                             final_age_1, final_age_2,
-                             n_particles)
-{
-  lambda_1      <- boot::inv.logit(pars[[1]])
-  lambda_2      <- boot::inv.logit(pars[[2]])
-  loss_rate_val <- boot::inv.logit(pars[[3]])
-
-  age_prob_df1 <- approximate_prob_inf_at_age(lambda_1,
-                                              loss_rate_val,
-                                              n_individuals = n_particles,
-                                              final_age_1)
-
-  ll_1 <- -sum(dbinom(x    = data_df1$n_infections,
-                      size = data_df1$n_individuals,
-                      prob = age_prob_df1$pct[-1],
-                      log = TRUE))
-
-  age_prob_df2 <- approximate_prob_inf_at_age(lambda_2,
-                                              loss_rate_val,
-                                              n_individuals = n_particles,
-                                              final_age_2)
-
-  ll_2 <- -sum(dbinom(x   = data_df2$n_infections,
-                     size = data_df2$n_individuals,
-                     prob = age_prob_df2$pct[-1],
-                     log = TRUE))
-
-  ll_1 + ll_2
-}
 
 find_MLE <- function(start_list, titre_data_list, age_inf_data_list,
                      final_age_vctr)
 {
-  future_imap(start_list, \(start_obj, id) {
+  future_map(start_list, \(start_obj) {
 
-    fn <- str_glue("./saved_objects/inference/opt_{id}.rds")
+    iter_id <- start_obj$iter_id
+
+    fn <- str_glue("./saved_objects/inference/MLE/opt_{iter_id}.rds")
 
     if(!file.exists(fn))
     {
+      message(str_glue("Starting iter: {iter_id}"))
+
+      start_obj[["iter_id"]] <- NULL
+
       par_vctr <- unlist(start_obj, use.names = TRUE)
+
+      print(par_vctr)
 
       res <- nloptr(
         x0                = par_vctr,
@@ -81,6 +45,8 @@ find_MLE <- function(start_list, titre_data_list, age_inf_data_list,
                     xtol_rel  = 1e-8,
                     ftol_rel  = 1e-10))
 
+      message(str_glue("Finished iter: {iter_id}"))
+
       saveRDS(res, fn)
     } else res <- readRDS(fn)
 
@@ -88,196 +54,84 @@ find_MLE <- function(start_list, titre_data_list, age_inf_data_list,
   })
 }
 
-find_MLE_old <- function(CPC_age_inf_df, KFCS_age_inf_df, final_age_1, final_age_2)
+get_starting_points <- function()
 {
-  set.seed(1645)
+  set.seed(111020225)
 
-  sobol_design(
-    lower = c(lambda_1 = 0.02, lambda_2 = 0.02,  rho = 0.002),
-    upper = c(lambda_1 = 0.15, lambda_2 = 0.15,  rho = 0.02),
-    nseq  = 200) -> guesses_df
+  start_df <- sobol_design(
+    lower = c("lambda_1" = 0.01,
+              "lambda_2" = 0.01,
+              "rho"      = 0.001,
+              "r1"       = 0.001,
+              "log_A0"   = 0.1,
+              "phi"      = 0,
+              "sd_1"     = 0.01,
+              "sd_2"     = 0.01),
+    upper = c("lambda_1" = 0.25,
+              "lambda_2" = 0.25,
+              "rho"      = 0.25,
+              "r1"       = 0.99,
+              "log_A0"   = 2,
+              "phi"      = 5,
+              "sd_1"     = 10,
+              "sd_2"     = 10),
+    nseq =  200)
 
-  init_list <- transpose(guesses_df)
+  function_list <- list(
+    lambda_1 = logit,
+    lambda_2 = logit,
+    rho      = logit,
+    r1       = logit,
+    log_A0   = log,
+    phi      = log,
+    sd_1     = log,
+    sd_2     = log)
 
-  n_cores <- future::availableCores() - 1
-
-  plan(multisession, workers = n_cores)
-
-  with_progress({
-    p <- progressor(steps = length(init_list))
-
-    loglik_df <- future_imap_dfr(init_list, \(init_obj, i) {
-
-      fn <- str_glue("./saved_objects/inference/MLE/iter_{i}.rds")
-
-      if(!file.exists(fn))
-      {
-        pars <- logit(c(init_obj$lambda_1,
-                        init_obj$lambda_2,
-                        init_obj$rho))
-
-        optim_result <- optim(pars,
-                              method = "Nelder-Mead",
-                              fn = loglik_2_cohorts,
-                              data_df1    = CPC_age_inf_df,
-                              data_df2    = KFCS_age_inf_df,
-                              final_age_1 = final_age_1,
-                              final_age_2 = final_age_2,
-                              n_particles = 1e5)
-
-        p()
-
-        df <- data.frame(
-          lambda_1_init = init_obj$lambda_1,
-          lambda_2_init = init_obj$lambda_2,
-          rho_init      = init_obj$rho,
-          lambda_1_MLE  = inv.logit(optim_result$par[[1]]),
-          lambda_2_MLE  = inv.logit(optim_result$par[[2]]),
-          rho_MLE       = inv.logit(optim_result$par[[3]]),
-          ll            = -optim_result$value,
-          convergence   = optim_result$convergence)
-
-        saveRDS(df, fn)
-      } else df <- readRDS(fn)
-
-      df
-    })
-  })
-
-  loglik_df
-}
-
-profile_ll_fun <- function(estimated_pars, data_df1, data_df2,
-                           final_age_1, final_age_2,
-                           n_particles, fixed_par, fixed_pos)
-{
-  pars <- append(estimated_pars, fixed_par, after = fixed_pos - 1)
-
-  loglik_2_cohorts(pars,
-                   data_df1,
-                   data_df2,
-                   final_age_1,
-                   final_age_2,
-                   n_particles)
-}
-
-maximise_over_profile <- function(par_vals, par_name, MLE_vals, fixed_pos,
-                                  data_df1, data_df2, final_age_1, final_age_2)
-{
-  n_cores <- future::availableCores() - 1
-
-  plan(multisession, workers = n_cores)
-
-  with_progress(
+  for (nm in names(function_list))
   {
-    p <- progressor(steps = length(par_vals))
+    start_df[[nm]] <- function_list[[nm]](start_df[[nm]])
+  }
 
-    profile_df <- future_imap_dfr(par_vals, run_profile_optim,
-                                  par_name    = par_name,
-                                  MLE_vals    = MLE_vals,
-                                  fixed_pos   = fixed_pos,
-                                  data_df1    = data_df1,
-                                  data_df2    = data_df2,
-                                  final_age_1 = final_age_1,
-                                  final_age_2 = final_age_2,
-                                  p           = p)
-  })
+  start_df <- start_df |> mutate(iter_id = row_number(),
+                                 .before = everything())
 
-  plan(sequential)
-  gc()
-
-  profile_df
+  start_list <- transpose(start_df)
 }
 
-run_profile_optim <- function(par_value, iter, par_name, MLE_vals, fixed_pos,
-                              data_df1, data_df2, final_age_1, final_age_2,
-                              p = NULL)
-{
-  fn <- str_glue("./saved_objects/inference/profile_{par_name}/iter_{iter}.rds")
 
-  if(!file.exists(fn))
-  {
-    estimated_pars <- logit(MLE_vals[-fixed_pos])
-
-    inits <- append(MLE_vals[-fixed_pos], par_value,
-                    after = fixed_pos - 1)
-
-    optim_result <- optim(estimated_pars,
-                          method      = "Nelder-Mead",
-                          fn          = profile_ll_fun,
-                          data_df1    = data_df1,
-                          data_df2    = data_df2,
-                          final_age_1 = final_age_1,
-                          final_age_2 = final_age_2,
-                          n_particles = 1e5,
-                          fixed_par   = logit(par_value),
-                          fixed_pos   = fixed_pos)
-
-    estimates <- append(optim_result$par, logit(par_value),
-                        after = fixed_pos - 1)
-
-    df <- data.frame(
-      lambda_1_init = inits[[1]],
-      lambda_2_init = inits[[2]],
-      rho_init      = inits[[3]],
-      lambda_1_MLE  = inv.logit(estimates[[1]]),
-      lambda_2_MLE  = inv.logit(estimates[[2]]),
-      rho_MLE       = inv.logit(estimates[[3]]),
-      ll            = -optim_result$value,
-      convergence   = optim_result$convergence)
-
-    saveRDS(df, fn)
-  } else df <- readRDS(fn)
-
-  if (!is.null(p)) p() # Progressor
-
-  df
-}
 
 estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
-                                      phi, beta, cohort_batches, final_age)
+                                      phi, beta, inf_times_list, final_age)
 {
+  titre_mat <- simulate_DENV_long_decay_titres(
+    inf_times_list = inf_times_list,
+    log_first_peak = log_first_peak,
+    decay_rate_vec = decay_rate,
+    phi            = phi,
+    beta           = beta,
+    final_age      = final_age)
 
-  titres_df <- future_map_dfr(cohort_batches, \(batch) {
+  titre_mat[titre_mat < 10] <- 5
 
-    cohort_df <- split(batch, batch$subject_id)
+  log2_titre_mat <- log2_transform(titre_mat)
 
-    map_df(cohort_df, \(subject_df) {
+  avg_titre <- colMeans(log2_titre_mat)
 
-      inf_times <- subject_df$age
-      inf_times <- inf_times[inf_times <= final_age]
-      s_id      <- unique(subject_df$subject_id)
-
-      simulate_DENV_long_decay_titres(inf_times,
-                                log_first_peak = log_first_peak,
-                                decay_rate     = decay_rate,
-                                phi            = phi,
-                                beta           = beta,
-                                subject_id     = s_id,
-                                final_age      = final_age)
-    })
-  })
-
-  avg_df <- titres_df |>
-    mutate(titre      = ifelse(titre < 10, 5, titre),
-           log2_titre = log2_transform(titre)) |>
-    group_by(age) |>
-    summarise(mean = mean(log2_titre),
-              .groups = "drop")
-
-  avg_df
+  avg_titre
 }
 
 log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
                                    final_age_vctr, n_indiv)
 {
   # Infection parameters-------------------
-  lambdas <- inv.logit(pars[1:2])
-  rho     <- inv.logit(pars[[3]])
+  lambda_1 <- inv.logit(pars[[1]])
+  lambda_2 <- inv.logit(pars[[2]])
+  lambdas  <- c(lambda_1, lambda_2)
+  rho      <- inv.logit(pars[[3]])
 
   # Decay rate dynamics--------------------
   r_1        <- inv.logit(pars[[4]])
-  decay_rate <- r_1 * exp(-0:3)
+  decay_rate <- r_1 * exp(-(0:3))
 
   # Peak dynamics--------------------------
   log_A0  <- exp(pars[[5]])
@@ -285,6 +139,18 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   beta    <- 1
 
   sd_vals <- exp(pars[7:8])
+
+  # cat("\n log A0: ", log_A0 )
+  # cat("\n Decay rate: ", decay_rate)
+  # cat("\n phi: ", phi)
+  # cat("\n sd_val: ", sd_vals[[1]])
+  # cat("\n sd_val2: ", sd_vals[[2]])
+  # cat("\n lambda 1: ", lambdas[[1]])
+  # cat("\n lambda 2: ", lambdas[[2]])
+  # cat("\n rho: ", rho)
+  # cat("\n r_1: ", r_1)
+  # cat("\n alpha: ", alpha)
+  # cat("\n kappa: ", kappa)
 
   set.seed(1150)
 
@@ -303,38 +169,53 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
     inf_df       <- inf_list[[cohort_idx]]
     age_inf_data <- age_inf_data_list[[cohort_idx]]
 
-    prob_inf_age <- inf_df |> group_by(age) |> count() |>
-      mutate(pct = n / n_indiv)
+    # prob_inf_age <- inf_df |> group_by(age) |> count() |>
+    #   mutate(pct = n / n_indiv)
+
+    age_tab <- tabulate(inf_df$age + 1, nbins = max(final_age_vctr[[cohort_idx]]) + 1)
+    prob_inf_age <- age_tab / n_indiv
 
     dbinom(x    = age_inf_data$n_infections,
            size = age_inf_data$n_individuals,
-           prob = prob_inf_age$pct[-1],
+           prob = prob_inf_age[-1],#prob_inf_age$pct[-1],
            log  = TRUE) |> sum()
   }) |> sum()
 
   ll_titre <- sapply(1:2, \(cohort_idx) {
 
     inf_df <- inf_list[[cohort_idx]]
-    cohort_batches <- split(inf_df, inf_df$subject_id %% 2000 + 1)
 
-    avg_titre_df <- estimate_avg_titre_by_age(
+    if(nrow(inf_df) == 0) return(-Inf)
+
+    ids <- seq_len(n_indiv)
+
+    inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
+
+    inf_times_list <- split(inf_df$age,
+                           factor(inf_df$subject_id, levels = ids))
+
+    avg_titre_vctr <- estimate_avg_titre_by_age(
       log_first_peak = log_A0,
-      decay_rate     =  decay_rate,
+      decay_rate     = decay_rate,
       phi            = phi,
       beta           = beta,
-      cohort_batches = cohort_batches,
-      final_age      =  final_age_vctr[[cohort_idx]])
+      inf_times_list = inf_times_list,
+      final_age      = final_age_vctr[[cohort_idx]])
 
     titre_df <- titre_data_list[[cohort_idx]]
 
-    dnorm(x    = titre_df $mean,
-          mean = avg_titre_df$mean[-1],
+    dnorm(x    = titre_df$mean,
+          mean = avg_titre_vctr[-1],
           sd   = sd_vals[[cohort_idx]] / sqrt(titre_df$n), log = TRUE) |>
       sum()
   }) |> sum()
 
 
   ll <- ll_age_inf + ll_titre
+
+  # cat("\n---------------")
+  # cat("\n log_lik: ", ll)
+  # cat("\n---------------")
 
   -ll
 }
