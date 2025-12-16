@@ -2,12 +2,12 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J MLE2
+#SBATCH -J MAP
 #! Which project should be charged:
 #SBATCH -A DENGEN-SL2-CPU
 #SBATCH -D /home/ja850/rds/hpc-work/DENV_reinfections/  # working directory
-#SBATCH --output=MLE_%A.log
-#SBATCH --error=MLE_%A.err
+#SBATCH --output=MAP_%A.log
+#SBATCH --error=MAP_%A.err
 #SBATCH -p icelake
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=50
@@ -22,4 +22,4 @@ echo "Job ID: $SLURM_JOB_ID"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 
 # run the script
-Rscript cluster_MLE_2.R
+Rscript cluster_MAP.R
