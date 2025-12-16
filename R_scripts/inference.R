@@ -63,6 +63,7 @@ get_starting_points <- function()
               "lambda_2" = 0.01,
               "rho"      = 0.001,
               "r1"       = 0.001,
+              "alpha"    = 0,
               "log_A0"   = 0.1,
               "phi"      = 0,
               "sd_1"     = 0.01,
@@ -71,6 +72,7 @@ get_starting_points <- function()
               "lambda_2" = 0.25,
               "rho"      = 0.25,
               "r1"       = 0.99,
+              "alpha"    = 0.99,
               "log_A0"   = 2,
               "phi"      = 5,
               "sd_1"     = 10,
@@ -82,6 +84,7 @@ get_starting_points <- function()
     lambda_2 = logit,
     rho      = logit,
     r1       = logit,
+    alpha    = logit,
     log_A0   = log,
     phi      = log,
     sd_1     = log,
@@ -131,14 +134,15 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
 
   # Decay rate dynamics--------------------
   r_1        <- inv.logit(pars[[4]])
-  decay_rate <- r_1 * exp(-(0:3))
+  alpha      <- inv.logit(pars[[5]])
+  decay_rate <- r_1 * exp(-alpha* (0:3))
 
   # Peak dynamics--------------------------
-  log_A0  <- exp(pars[[5]])
-  phi     <- exp(pars[[6]])
+  log_A0  <- exp(pars[[6]])
+  phi     <- exp(pars[[7]])
   beta    <- 1
 
-  sd_vals <- exp(pars[7:8])
+  sd_vals <- exp(pars[8:9])
 
   # cat("\n log A0: ", log_A0 )
   # cat("\n Decay rate: ", decay_rate)
