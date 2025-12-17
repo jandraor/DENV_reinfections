@@ -42,7 +42,7 @@ start_list <- get_starting_points()
 
 plan(multisession, workers = availableCores())
 
-res_list <- find_MAP(start_list, titre_data_list,
+res_list <- find_MLE_2(start_list, titre_data_list,
                      age_inf_data_list, final_age_vctr)
 
 plan(sequential)

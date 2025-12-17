@@ -14,7 +14,7 @@ approximate_prob_inf_at_age <- function(lambda_serotype,
 
 
 
-find_MAP <- function(start_list, titre_data_list, age_inf_data_list,
+find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
                      final_age_vctr)
 {
   future_map(start_list, \(start_obj) {
@@ -31,11 +31,9 @@ find_MAP <- function(start_list, titre_data_list, age_inf_data_list,
 
       par_vctr <- unlist(start_obj, use.names = TRUE)
 
-      print(par_vctr)
-
       res <- nloptr(
         x0                = par_vctr,
-        eval_f            = log_pos_titre_prob_inf,
+        eval_f            = log_lik_titre_prob_inf,
         titre_data_list   = titre_data_list,
         age_inf_data_list = age_inf_data_list,
         final_age_vctr    = final_age_vctr,
@@ -62,17 +60,19 @@ get_starting_points <- function()
     lower = c("lambda_1" = 0.01,
               "lambda_2" = 0.01,
               "rho"      = 0.001,
-              "r1"       = 0.001,
+              #"r1"       = 0.001,
               "log_A0"   = 0.1,
-              "phi"      = 0,
+              "phi"      = 1,
+              #"beta"     = 0,
               "sd_1"     = 0.01,
               "sd_2"     = 0.01),
     upper = c("lambda_1" = 0.25,
               "lambda_2" = 0.25,
               "rho"      = 0.25,
-              "r1"       = 0.99,
-              "log_A0"   = 2,
-              "phi"      = 5,
+              #"r1"       = 0.99,
+              "log_A0"   = 4,
+              "phi"      = 10,
+              #"beta"     = 0.99,
               "sd_1"     = 10,
               "sd_2"     = 10),
     nseq =  200)
@@ -81,9 +81,10 @@ get_starting_points <- function()
     lambda_1 = logit,
     lambda_2 = logit,
     rho      = logit,
-    r1       = logit,
+  #  r1       = logit,
     log_A0   = log,
     phi      = log,
+    #beta     = logit,
     sd_1     = log,
     sd_2     = log)
 
@@ -120,9 +121,10 @@ estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
   avg_titre
 }
 
-log_pos_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
+log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
                                    final_age_vctr, n_indiv)
 {
+  #print(pars)
   # Infection parameters-------------------
   lambda_1 <- inv.logit(pars[[1]])
   lambda_2 <- inv.logit(pars[[2]])
@@ -130,16 +132,19 @@ log_pos_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   rho      <- inv.logit(pars[[3]])
 
   # Decay rate dynamics--------------------
-  r_1        <- inv.logit(pars[[4]])
-  decay_rate <- r_1 * exp(-(0:3))
+  # r_1        <- inv.logit(pars[[4]])
+  # decay_rate <- r_1 * exp(-(0:3))
+  decay_rate <- 0.2 * exp(-0.5*(0:3))
+
 
   # Peak dynamics--------------------------
-  log_A0  <- exp(pars[[5]])
-  phi     <- exp(pars[[6]])
+  log_A0  <- exp(pars[[4]])
+  phi     <- exp(pars[[5]])
   beta    <- 1
 
-  sd_vals <- exp(pars[7:8])
+  sd_vals <- exp(pars[6:7])
 
+  # cat("\n---------------")
   # cat("\n log A0: ", log_A0 )
   # cat("\n Decay rate: ", decay_rate)
   # cat("\n phi: ", phi)
@@ -150,7 +155,7 @@ log_pos_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   # cat("\n rho: ", rho)
   # cat("\n r_1: ", r_1)
   #cat("\n alpha: ", alpha)
-  # cat("\n kappa: ", kappa)
+  #cat("\n beta: ", beta)
 
   set.seed(1150)
 
@@ -210,16 +215,13 @@ log_pos_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
       sum()
   }) |> sum()
 
-  log_prior <- dgamma(r_1, 36, 240, log = TRUE)
+  ll <- ll_age_inf + ll_titre
 
-  lp <- log_prior + ll_age_inf + ll_titre
 
-  # cat("\n---------------")
   # cat("\n ll_age_inf:", ll_age_inf)
   # cat("\n log_prior: ", log_prior)
   # cat("\n log_lik: ", ll_age_inf + ll_titre)
-  # cat("\n log_pos: ", lp)
   # cat("\n---------------")
 
-  -lp
+  -ll
 }
