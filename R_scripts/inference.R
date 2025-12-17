@@ -21,7 +21,7 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
 
     iter_id <- start_obj$iter_id
 
-    fn <- str_glue("./saved_objects/inference/two_datasets/MAP/opt_{iter_id}.rds")
+    fn <- str_glue("./saved_objects/inference/two_datasets/MLE/opt_{iter_id}.rds")
 
     if(!file.exists(fn))
     {
