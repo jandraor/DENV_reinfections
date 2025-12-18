@@ -52,6 +52,25 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
   })
 }
 
+function_list <- list(
+  lambda_1 = logit,
+  lambda_2 = logit,
+  rho      = logit,
+  log_A0   = log,
+  phi      = log,
+  sd_1     = log,
+  sd_2     = log)
+
+inverse_link_funs <- list(
+  lambda_1 = inv.logit,
+  lambda_2 = inv.logit,
+  rho      = inv.logit,
+  log_A0   = exp,
+  phi      = exp,
+  sd_1     = exp,
+  sd_2     = exp)
+
+
 get_starting_points <- function()
 {
   set.seed(111020225)
@@ -60,33 +79,18 @@ get_starting_points <- function()
     lower = c("lambda_1" = 0.01,
               "lambda_2" = 0.01,
               "rho"      = 0.001,
-              #"r1"       = 0.001,
               "log_A0"   = 0.1,
               "phi"      = 1,
-              #"beta"     = 0,
               "sd_1"     = 0.01,
               "sd_2"     = 0.01),
     upper = c("lambda_1" = 0.25,
               "lambda_2" = 0.25,
               "rho"      = 0.25,
-              #"r1"       = 0.99,
               "log_A0"   = 4,
               "phi"      = 10,
-              #"beta"     = 0.99,
               "sd_1"     = 10,
               "sd_2"     = 10),
     nseq =  200)
-
-  function_list <- list(
-    lambda_1 = logit,
-    lambda_2 = logit,
-    rho      = logit,
-  #  r1       = logit,
-    log_A0   = log,
-    phi      = log,
-    #beta     = logit,
-    sd_1     = log,
-    sd_2     = log)
 
   for (nm in names(function_list))
   {
@@ -124,7 +128,6 @@ estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
 log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
                                    final_age_vctr, n_indiv)
 {
-  #print(pars)
   # Infection parameters-------------------
   lambda_1 <- inv.logit(pars[[1]])
   lambda_2 <- inv.logit(pars[[2]])
@@ -132,8 +135,6 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   rho      <- inv.logit(pars[[3]])
 
   # Decay rate dynamics--------------------
-  # r_1        <- inv.logit(pars[[4]])
-  # decay_rate <- r_1 * exp(-(0:3))
   decay_rate <- 0.2 * exp(-0.5*(0:3))
 
 
@@ -174,15 +175,12 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
     inf_df       <- inf_list[[cohort_idx]]
     age_inf_data <- age_inf_data_list[[cohort_idx]]
 
-    # prob_inf_age <- inf_df |> group_by(age) |> count() |>
-    #   mutate(pct = n / n_indiv)
-
     age_tab <- tabulate(inf_df$age + 1, nbins = max(final_age_vctr[[cohort_idx]]) + 1)
     prob_inf_age <- age_tab / n_indiv
 
     dbinom(x    = age_inf_data$n_infections,
            size = age_inf_data$n_individuals,
-           prob = prob_inf_age[-1],#prob_inf_age$pct[-1],
+           prob = prob_inf_age[-1],
            log  = TRUE) |> sum()
   }) |> sum()
 
@@ -225,3 +223,39 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
 
   -ll
 }
+
+get_MLE_2 <- function()
+{
+  fldr <- "./saved_objects/inference/two_datasets/MLE"
+
+  files <- list.files(path = fldr, pattern = "^opt")
+
+  sol_df <- map_df(files, \(fn) {
+
+    fp <- file.path(fldr, fn)
+
+    res <- readRDS(fp)
+
+    sol <- res$solution
+
+    names(sol) <- c("lambda_1",
+                    "lambda_2",
+                    "rho" ,
+                    "log_A0" ,
+                    "phi" ,
+                    "sd_1" ,
+                    "sd_2")
+
+    for (nm in names(inverse_link_funs))
+    {
+      sol[[nm]] <- inverse_link_funs[[nm]](sol[[nm]])
+    }
+
+    as.data.frame(as.list(sol)) |>
+      mutate(ll = -res$objective)
+  })
+
+  sol_df |> filter(ll == max(ll)) |> as.list()
+}
+
+source("./R_scripts/inference_profile.R")
