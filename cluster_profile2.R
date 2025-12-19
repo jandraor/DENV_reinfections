@@ -41,11 +41,10 @@ titre_data_list   <- list(KFCS_avg_titre, CPC_avg_titre)
 MLE_vals    <- get_MLE_2()
 MLE_vals$ll <- NULL
 
+plan(multisession, workers = availableCores())
 # lambda 1----------------------------------------------------------------------
 
-lambda_1_vals <- seq(0.035, 0.065, by = 0.0001)
-
-plan(multisession, workers = availableCores())
+# lambda_1_vals <- seq(0.035, 0.065, by = 0.0001)
 
 # prof_objs <- construct_profile(fixed_vals        = lambda_1_vals,
 #                                fixed_pos         = 1,
@@ -56,25 +55,25 @@ plan(multisession, workers = availableCores())
 
 # lambda 2----------------------------------------------------------------------
 
-lambda_2_vals <- seq(0.07, 0.10, by = 0.0001)
-
-prof2_objs <- construct_profile(fixed_vals        = lambda_2_vals,
-                                fixed_pos         = 2,
-                                MLE_vals          = MLE_vals,
-                                titre_data_list   = titre_data_list,
-                                age_inf_data_list = age_inf_data_list,
-                                final_age_vctr    = final_age_vctr)
+# lambda_2_vals <- seq(0.07, 0.10, by = 0.0001)
+#
+# prof2_objs <- construct_profile(fixed_vals        = lambda_2_vals,
+#                                 fixed_pos         = 2,
+#                                 MLE_vals          = MLE_vals,
+#                                 titre_data_list   = titre_data_list,
+#                                 age_inf_data_list = age_inf_data_list,
+#                                 final_age_vctr    = final_age_vctr)
 
 # rho --------------------------------------------------------------------------
 
-rho_vals <- seq(0.005, 0.011, by = 0.000025)
-
-prof3_objs <- construct_profile(fixed_vals        = rho_vals,
-                                fixed_pos         = 3,
-                                MLE_vals          = MLE_vals,
-                                titre_data_list   = titre_data_list,
-                                age_inf_data_list = age_inf_data_list,
-                                final_age_vctr    = final_age_vctr)
+# rho_vals <- seq(0.005, 0.011, by = 0.000025)
+#
+# prof3_objs <- construct_profile(fixed_vals        = rho_vals,
+#                                 fixed_pos         = 3,
+#                                 MLE_vals          = MLE_vals,
+#                                 titre_data_list   = titre_data_list,
+#                                 age_inf_data_list = age_inf_data_list,
+#                                 final_age_vctr    = final_age_vctr)
 
 # log_A0------------------------------------------------------------------------
 
@@ -93,6 +92,28 @@ phi_vals <- seq(5.2, 5.7, by = 0.002)
 
 prof5_objs <- construct_profile(fixed_vals        = phi_vals,
                                 fixed_pos         = 5,
+                                MLE_vals          = MLE_vals,
+                                titre_data_list   = titre_data_list,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr)
+
+# sd_1--------------------------------------------------------------------------
+
+sd_1_vals <- seq(2, 5, by = 0.01)
+
+prof6_objs <- construct_profile(fixed_vals        = sd_1_vals,
+                                fixed_pos         = 6,
+                                MLE_vals          = MLE_vals,
+                                titre_data_list   = titre_data_list,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr)
+
+# sd_2--------------------------------------------------------------------------
+
+sd_2_vals <- seq(1.5, 4.5, by = 0.01)
+
+prof7_objs <- construct_profile(fixed_vals        = sd_2_vals,
+                                fixed_pos         = 7,
                                 MLE_vals          = MLE_vals,
                                 titre_data_list   = titre_data_list,
                                 age_inf_data_list = age_inf_data_list,
