@@ -52,7 +52,7 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
   })
 }
 
-function_list <- list(
+link_funs <- list(
   lambda_1 = logit,
   lambda_2 = logit,
   rho      = logit,
@@ -92,9 +92,9 @@ get_starting_points <- function()
               "sd_2"     = 10),
     nseq =  200)
 
-  for (nm in names(function_list))
+  for (nm in names(link_funs))
   {
-    start_df[[nm]] <- function_list[[nm]](start_df[[nm]])
+    start_df[[nm]] <- link_funs[[nm]](start_df[[nm]])
   }
 
   start_df <- start_df |> mutate(iter_id = row_number(),
@@ -154,9 +154,6 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   # cat("\n lambda 1: ", lambdas[[1]])
   # cat("\n lambda 2: ", lambdas[[2]])
   # cat("\n rho: ", rho)
-  # cat("\n r_1: ", r_1)
-  #cat("\n alpha: ", alpha)
-  #cat("\n beta: ", beta)
 
   set.seed(1150)
 
@@ -217,7 +214,6 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
 
 
   # cat("\n ll_age_inf:", ll_age_inf)
-  # cat("\n log_prior: ", log_prior)
   # cat("\n log_lik: ", ll_age_inf + ll_titre)
   # cat("\n---------------")
 
