@@ -17,7 +17,7 @@ optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
 
   if(!file.exists(fn))
   {
-    unc_fixed_val <- function_list[[fixed_pos]](fixed_val)
+    unc_fixed_val <- link_funs[[fixed_pos]](fixed_val)
 
 
     MLE_vals[[fixed_pos]] <- NULL
@@ -27,7 +27,7 @@ optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
     names_vctr <- names(par_vctr)
 
     #Unconstrained (unc)
-    unc_par_vctr <- map_dbl(names_vctr, \(nm) function_list[[nm]](par_vctr[[nm]]))
+    unc_par_vctr <- map_dbl(names_vctr, \(nm) link_funs[[nm]](par_vctr[[nm]]))
 
     names(unc_par_vctr) <- names_vctr
 
