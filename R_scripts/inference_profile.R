@@ -10,7 +10,8 @@ profile_fun_2 <- function(estimated_pars, titre_data_list, age_inf_data_list,
 
 optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
                                       titre_data_list, age_inf_data_list,
-                                      final_age_vctr, fixed_pos)
+                                      final_age_vctr, fixed_pos,
+                                      n_indiv)
 {
   fn <- str_glue("./saved_objects/inference/two_datasets/profile_{fixed_pos}/iter_{id}.rds")
 
@@ -36,13 +37,14 @@ optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
       titre_data_list   = titre_data_list,
       age_inf_data_list = age_inf_data_list,
       final_age_vctr    = final_age_vctr,
-      n_indiv           = 1e4,
+      n_indiv           = n_indiv,
       fixed_par         = unc_fixed_val,
       fixed_pos         = fixed_pos,
       opts = list(algorithm = "NLOPT_LN_SBPLX",
-                  maxeval   = 20000,
-                  xtol_rel  = 1e-8,
-                  ftol_rel  = 1e-10))
+                  maxeval     = 20000,
+                  xtol_rel    = 1e-8,
+                  ftol_rel    = 1e-10,
+                  print_level = 0))
 
     saveRDS(res, fn)
 
@@ -52,7 +54,7 @@ optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
 }
 
 construct_profile <- function(fixed_vals, fixed_pos, MLE_vals, titre_data_list,
-                              age_inf_data_list, final_age_vctr)
+                              age_inf_data_list, final_age_vctr, n_indiv)
 {
   future_imap(
     fixed_vals,
@@ -61,5 +63,6 @@ construct_profile <- function(fixed_vals, fixed_pos, MLE_vals, titre_data_list,
     titre_data_list = titre_data_list,
     age_inf_data_list = age_inf_data_list,
     final_age_vctr = final_age_vctr,
-    fixed_pos  = fixed_pos)
+    fixed_pos  = fixed_pos,
+    n_indiv    = n_indiv)
 }
