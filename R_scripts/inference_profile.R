@@ -8,21 +8,20 @@ profile_fun_2 <- function(estimated_pars, titre_data_list, age_inf_data_list,
                          final_age_vctr, n_indiv)
 }
 
-optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
-                                      titre_data_list, age_inf_data_list,
-                                      final_age_vctr, fixed_pos,
-                                      n_indiv)
+optimise_over_fixed_value <- function(starting_point, id, titre_data_list,
+                                      age_inf_data_list, final_age_vctr,
+                                      fixed_pos, n_indiv)
 {
   fn <- str_glue("./saved_objects/inference/two_datasets/profile_{fixed_pos}/iter_{id}.rds")
 
   if(!file.exists(fn))
   {
+    fixed_val     <- starting_point[[fixed_pos]]
     unc_fixed_val <- link_funs[[fixed_pos]](fixed_val)
 
+    starting_point[[fixed_pos]] <- NULL
 
-    MLE_vals[[fixed_pos]] <- NULL
-
-    par_vctr <- unlist(MLE_vals, use.names = TRUE)
+    par_vctr <- unlist(starting_point, use.names = TRUE)
 
     names_vctr <- names(par_vctr)
 
@@ -53,13 +52,12 @@ optimise_over_fixed_value <- function(fixed_val, id, MLE_vals,
   res
 }
 
-construct_profile <- function(fixed_vals, fixed_pos, MLE_vals, titre_data_list,
+construct_profile <- function(starting_points, fixed_pos, titre_data_list,
                               age_inf_data_list, final_age_vctr, n_indiv)
 {
   future_imap(
-    fixed_vals,
+    starting_points,
     optimise_over_fixed_value,
-    MLE_vals = MLE_vals,
     titre_data_list = titre_data_list,
     age_inf_data_list = age_inf_data_list,
     final_age_vctr = final_age_vctr,

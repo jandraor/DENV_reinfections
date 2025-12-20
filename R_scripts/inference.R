@@ -146,14 +146,13 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   sd_vals <- exp(pars[6:7])
 
   # cat("\n---------------")
-  # cat("\n log A0: ", log_A0 )
-  # cat("\n Decay rate: ", decay_rate)
-  # cat("\n phi: ", phi)
-  # cat("\n sd_val: ", sd_vals[[1]])
-  # cat("\n sd_val2: ", sd_vals[[2]])
   # cat("\n lambda 1: ", lambdas[[1]])
   # cat("\n lambda 2: ", lambdas[[2]])
   # cat("\n rho: ", rho)
+  # cat("\n log A0: ", log_A0 )
+  # cat("\n phi: ", phi)
+  # cat("\n sd_val: ", sd_vals[[1]])
+  # cat("\n sd_val2: ", sd_vals[[2]])
 
   set.seed(1150)
 
@@ -220,7 +219,7 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   -ll
 }
 
-get_MLE_2 <- function()
+get_loglik_2 <- function()
 {
   fldr <- "./saved_objects/inference/two_datasets/MLE"
 
@@ -251,7 +250,7 @@ get_MLE_2 <- function()
       mutate(ll = -res$objective)
   })
 
-  sol_df |> filter(ll == max(ll)) |> as.list()
+  sol_df
 }
 
 source("./R_scripts/inference_profile.R")
