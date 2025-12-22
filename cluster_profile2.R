@@ -193,12 +193,24 @@ prof6_objs <- construct_profile(starting_points   = sp_list,
 
 # sd_2--------------------------------------------------------------------------
 
-# sd_2_vals <- seq(1.5, 4.5, by = 0.01)
-#
-# prof7_objs <- construct_profile(fixed_vals        = sd_2_vals,
-#                                 fixed_pos         = 7,
-#                                 MLE_vals          = MLE_vals,
-#                                 titre_data_list   = titre_data_list,
-#                                 age_inf_data_list = age_inf_data_list,
-#                                 final_age_vctr    = final_age_vctr,
-#                                 n_indiv           = 1e5)
+sd_2_vals <- seq(1.5, 4.5, by = 0.01)
+
+set.seed(1015)
+
+guesses_df <- profile_design(
+  sd_2   = sd_2_vals,
+  lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1")],
+  upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1")],
+  nprof  = 10, type = "sobol")
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof7_objs <- construct_profile(starting_points   = sp_list,
+                                fixed_pos         = 7,
+                                titre_data_list   = titre_data_list,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr,
+                                n_indiv           = n_indiv)
