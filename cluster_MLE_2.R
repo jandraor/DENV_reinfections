@@ -43,6 +43,6 @@ start_list <- get_starting_points()
 plan(multisession, workers = availableCores())
 
 res_list <- find_MLE_2(start_list, titre_data_list,
-                     age_inf_data_list, final_age_vctr)
+                       age_inf_data_list, final_age_vctr, n_indiv = 1e4)
 
 plan(sequential)

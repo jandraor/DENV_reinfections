@@ -15,7 +15,7 @@ approximate_prob_inf_at_age <- function(lambda_serotype,
 
 
 find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
-                     final_age_vctr)
+                     final_age_vctr, n_indiv)
 {
   future_map(start_list, \(start_obj) {
 
@@ -37,11 +37,12 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
         titre_data_list   = titre_data_list,
         age_inf_data_list = age_inf_data_list,
         final_age_vctr    = final_age_vctr,
-        n_indiv           = 1e4,
+        n_indiv           = n_indiv,
         opts = list(algorithm = "NLOPT_LN_SBPLX",
                     maxeval   = 20000,
                     xtol_rel  = 1e-8,
-                    ftol_rel  = 1e-10))
+                    ftol_rel  = 1e-10,
+                    print_level = 0))
 
       message(str_glue("Finished iter: {iter_id}"))
 
@@ -154,69 +155,77 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   # cat("\n sd_val: ", sd_vals[[1]])
   # cat("\n sd_val2: ", sd_vals[[2]])
 
-  set.seed(1150)
+  set.seed(1557)
 
-  inf_list <- lapply(1:2, \(cohort_idx) {
+  ll_vals <- future_map_dbl(1:50, \(k) {
 
-    simulate_DENV_infections_since_birth(
-      lambda_serotype   = lambdas[[cohort_idx]],
-      loss_rate         = rho,
-      final_age         = final_age_vctr[[cohort_idx]],
-      n_individuals     = n_indiv) |>
-      rename(subject_id = infected_ind)
-  })
+    inf_list <- lapply(1:2, \(cohort_idx) {
 
-  ll_age_inf <- sapply(1:2, \(cohort_idx) {
+      simulate_DENV_infections_since_birth(
+        lambda_serotype   = lambdas[[cohort_idx]],
+        loss_rate         = rho,
+        final_age         = final_age_vctr[[cohort_idx]],
+        n_individuals     = n_indiv)
+    })
 
-    inf_df       <- inf_list[[cohort_idx]]
-    age_inf_data <- age_inf_data_list[[cohort_idx]]
+    ll_age_inf <- sapply(1:2, \(cohort_idx) {
 
-    age_tab <- tabulate(inf_df$age + 1, nbins = max(final_age_vctr[[cohort_idx]]) + 1)
-    prob_inf_age <- age_tab / n_indiv
+      inf_df       <- inf_list[[cohort_idx]]
+      age_inf_data <- age_inf_data_list[[cohort_idx]]
 
-    dbinom(x    = age_inf_data$n_infections,
-           size = age_inf_data$n_individuals,
-           prob = prob_inf_age[-1],
-           log  = TRUE) |> sum()
-  }) |> sum()
+      age_tab <- tabulate(inf_df$age + 1, nbins = max(final_age_vctr[[cohort_idx]]) + 1)
+      prob_inf_age <- age_tab / n_indiv
 
-  ll_titre <- sapply(1:2, \(cohort_idx) {
+      dbinom(x    = age_inf_data$n_infections,
+             size = age_inf_data$n_individuals,
+             prob = prob_inf_age[-c(1, 2)],
+             log  = TRUE) |> sum()
+    }) |> sum()
 
-    inf_df <- inf_list[[cohort_idx]]
+    ll_titre <- sapply(1:2, \(cohort_idx) {
 
-    if(nrow(inf_df) == 0) return(-Inf)
+      inf_df <- inf_list[[cohort_idx]]
 
-    ids <- seq_len(n_indiv)
+      if(nrow(inf_df) == 0) return(-Inf)
 
-    inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
+      ids <- seq_len(n_indiv)
 
-    inf_times_list <- split(inf_df$age,
-                           factor(inf_df$subject_id, levels = ids))
+      inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
 
-    avg_titre_vctr <- estimate_avg_titre_by_age(
-      log_first_peak = log_A0,
-      decay_rate     = decay_rate,
-      phi            = phi,
-      beta           = beta,
-      inf_times_list = inf_times_list,
-      final_age      = final_age_vctr[[cohort_idx]])
+      inf_times_list <- split(inf_df$age,
+                              factor(inf_df$subject_id, levels = ids))
 
-    titre_df <- titre_data_list[[cohort_idx]]
+      avg_titre_vctr <- estimate_avg_titre_by_age(
+        log_first_peak = log_A0,
+        decay_rate     = decay_rate,
+        phi            = phi,
+        beta           = beta,
+        inf_times_list = inf_times_list,
+        final_age      = final_age_vctr[[cohort_idx]])
 
-    dnorm(x    = titre_df$mean,
-          mean = avg_titre_vctr[-1],
-          sd   = sd_vals[[cohort_idx]] / sqrt(titre_df$n), log = TRUE) |>
+      titre_df <- titre_data_list[[cohort_idx]]
+
+      dnorm(x    = titre_df$mean,
+            mean = avg_titre_vctr[-1],
+            sd   = sd_vals[[cohort_idx]] / sqrt(titre_df$n), log = TRUE) |>
       sum()
-  }) |> sum()
+    }) |> sum()
 
-  ll <- ll_age_inf + ll_titre
+    ll <- ll_age_inf + ll_titre
 
+    ll
+  }, .options = furrr_options(seed = TRUE))
 
-  # cat("\n ll_age_inf:", ll_age_inf)
-  # cat("\n log_lik: ", ll_age_inf + ll_titre)
-  # cat("\n---------------")
+  #cat("\n Log lik: ", -mean(ll_vals))
 
-  -ll
+  # Compute mean log-likelihood and MCSE
+  mean_ll <- -mean(ll_vals)            # negative log-likelihood
+  mcse    <- sd(ll_vals) / sqrt(50)
+
+  # Attach MCSE as an attribute
+  attr(mean_ll, "MCSE") <- mcse
+
+  mean_ll
 }
 
 get_loglik_2 <- function()
