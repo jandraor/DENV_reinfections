@@ -43,7 +43,7 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
         n_indiv           = n_indiv,
         seed_vec          = seed_vec,
         opts = list(algorithm = "NLOPT_LN_SBPLX",
-                    maxeval   = 20000,
+                    maxeval   = 3000,
                     xtol_rel  = 1e-8,
                     ftol_rel  = 1e-10,
                     print_level = 0))
@@ -248,6 +248,10 @@ get_loglik_2 <- function()
 
     sol <- res$solution
 
+    status <- res$status
+
+    if(status == 5) return (NULL)
+
     names(sol) <- c("lambda_1",
                     "lambda_2",
                     "rho" ,
@@ -268,4 +272,5 @@ get_loglik_2 <- function()
   sol_df
 }
 
+source("./R_scripts/inference_data.R")
 source("./R_scripts/inference_profile.R")

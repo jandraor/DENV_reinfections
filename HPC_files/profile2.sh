@@ -8,9 +8,9 @@
 #SBATCH -D /home/ja850/rds/hpc-work/DENV_reinfections/  # working directory
 #SBATCH --output=prof2lambda1_%A.log
 #SBATCH --error=prof2lambda1_%A.err
-#SBATCH -p icelake
+#SBATCH -p sapphire
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=60
+#SBATCH --cpus-per-task=110
 #SBATCH --mem=64G
 #SBATCH --ntasks=1
 #! How much wallclock time will be required?
@@ -22,4 +22,4 @@ echo "Job ID: $SLURM_JOB_ID"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 
 # run the script
-Rscript cluster_profile2.R
+Rscript cluster_profile2.R lambda_1

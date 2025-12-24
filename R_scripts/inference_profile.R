@@ -1,17 +1,21 @@
 profile_fun_2 <- function(estimated_pars, titre_data_list, age_inf_data_list,
-                          final_age_vctr, n_indiv, fixed_par, fixed_pos)
+                          final_age_vctr, n_indiv, fixed_par, fixed_pos,
+                          seed_vec)
 {
 
   pars <- append(estimated_pars, fixed_par, after = fixed_pos - 1)
 
   log_lik_titre_prob_inf(pars, titre_data_list, age_inf_data_list,
-                         final_age_vctr, n_indiv)
+                         final_age_vctr, n_indiv, seed_vec)
 }
 
 optimise_over_fixed_value <- function(starting_point, id, titre_data_list,
                                       age_inf_data_list, final_age_vctr,
                                       fixed_pos, n_indiv)
 {
+  set.seed(1742)
+  seed_vec <- sample.int(1e7, 10)
+
   fn <- str_glue("./saved_objects/inference/two_datasets/profile_{fixed_pos}/iter_{id}.rds")
 
   if(!file.exists(fn))
@@ -39,8 +43,9 @@ optimise_over_fixed_value <- function(starting_point, id, titre_data_list,
       n_indiv           = n_indiv,
       fixed_par         = unc_fixed_val,
       fixed_pos         = fixed_pos,
+      seed_vec          = seed_vec,
       opts = list(algorithm = "NLOPT_LN_SBPLX",
-                  maxeval     = 20000,
+                  maxeval     = 3500,
                   xtol_rel    = 1e-8,
                   ftol_rel    = 1e-10,
                   print_level = 0))
@@ -58,9 +63,9 @@ construct_profile <- function(starting_points, fixed_pos, titre_data_list,
   future_imap(
     starting_points,
     optimise_over_fixed_value,
-    titre_data_list = titre_data_list,
+    titre_data_list   = titre_data_list,
     age_inf_data_list = age_inf_data_list,
-    final_age_vctr = final_age_vctr,
-    fixed_pos  = fixed_pos,
-    n_indiv    = n_indiv)
+    final_age_vctr    = final_age_vctr,
+    fixed_pos         = fixed_pos,
+    n_indiv           = n_indiv)
 }
