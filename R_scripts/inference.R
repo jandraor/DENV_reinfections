@@ -17,6 +17,9 @@ approximate_prob_inf_at_age <- function(lambda_serotype,
 find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
                      final_age_vctr, n_indiv)
 {
+  set.seed(1742)
+  seed_vec <- sample.int(1e7, 10)
+
   future_map(start_list, \(start_obj) {
 
     iter_id <- start_obj$iter_id
@@ -38,6 +41,7 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
         age_inf_data_list = age_inf_data_list,
         final_age_vctr    = final_age_vctr,
         n_indiv           = n_indiv,
+        seed_vec          = seed_vec,
         opts = list(algorithm = "NLOPT_LN_SBPLX",
                     maxeval   = 20000,
                     xtol_rel  = 1e-8,
@@ -127,7 +131,7 @@ estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
 }
 
 log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
-                                   final_age_vctr, n_indiv)
+                                   final_age_vctr, n_indiv, seed_vec)
 {
   # Infection parameters-------------------
   lambda_1 <- inv.logit(pars[[1]])
@@ -155,9 +159,11 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   # cat("\n sd_val: ", sd_vals[[1]])
   # cat("\n sd_val2: ", sd_vals[[2]])
 
-  set.seed(1557)
+  n_replicates <- length(seed_vec)
 
-  ll_vals <- future_map_dbl(1:50, \(k) {
+  ll_vals <- map_dbl(seq_len(n_replicates), \(k) {
+
+    set.seed(seed_vec[k])
 
     inf_list <- lapply(1:2, \(cohort_idx) {
 
@@ -214,13 +220,13 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
     ll <- ll_age_inf + ll_titre
 
     ll
-  }, .options = furrr_options(seed = TRUE))
+  })
 
   #cat("\n Log lik: ", -mean(ll_vals))
 
   # Compute mean log-likelihood and MCSE
   mean_ll <- -mean(ll_vals)            # negative log-likelihood
-  mcse    <- sd(ll_vals) / sqrt(50)
+  mcse    <- sd(ll_vals) / sqrt(length(ll_vals))
 
   # Attach MCSE as an attribute
   attr(mean_ll, "MCSE") <- mcse
