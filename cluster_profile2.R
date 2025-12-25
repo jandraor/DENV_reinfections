@@ -70,7 +70,7 @@ if(param == "lambda_1")
 # lambda 2----------------------------------------------------------------------
 if(param == "lambda_2")
 {
-  lambda_2_vals <- seq(0.07, 0.10, by = 0.0001)
+  lambda_2_vals <- seq(0.07, 0.10, by = 0.001)
 
   set.seed(0954)
 
@@ -78,7 +78,7 @@ if(param == "lambda_2")
     lambda_2  = lambda_2_vals,
     lower = box[1, c("lambda_1", "rho", "log_A0", "phi", "sd_1", "sd_2")],
     upper = box[2, c("lambda_1", "rho", "log_A0", "phi", "sd_1", "sd_2")],
-    nprof = 10, type = "sobol")
+    nprof = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
