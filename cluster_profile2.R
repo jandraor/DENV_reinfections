@@ -96,7 +96,7 @@ if(param == "lambda_2")
 # rho --------------------------------------------------------------------------
 if(param == "rho")
 {
-  rho_vals <- seq(0.005, 0.011, by = 0.000025)
+  rho_vals <- seq(0.005, 0.011, by = 0.0002)
 
   set.seed(1002)
 
@@ -104,7 +104,7 @@ if(param == "rho")
     rho   = rho_vals,
     lower = box[1, c("lambda_1", "lambda_2", "log_A0", "phi", "sd_1", "sd_2")],
     upper = box[2, c("lambda_1", "lambda_2", "log_A0", "phi", "sd_1", "sd_2")],
-    nprof = 10, type = "sobol")
+    nprof = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
