@@ -156,7 +156,7 @@ if(param == "phi")
     phi = phi_vals,
     lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "sd_1", "sd_2")],
     upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "sd_1", "sd_2")],
-    nprof  = 10, type = "sobol")
+    nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
@@ -174,7 +174,7 @@ if(param == "phi")
 # sd_1--------------------------------------------------------------------------
 if(param == "sd_1")
 {
-  sd_1_vals <- seq(2, 5, by = 0.01)
+  sd_1_vals <- seq(2, 4, by = 0.05)
 
   set.seed(2118)
 
@@ -182,7 +182,7 @@ if(param == "sd_1")
     sd_1   = sd_1_vals,
     lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_2")],
     upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_2")],
-    nprof  = 10, type = "sobol")
+    nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
@@ -201,7 +201,7 @@ if(param == "sd_1")
 # sd_2--------------------------------------------------------------------------
 if(param == "sd_2")
 {
-  sd_2_vals <- seq(1.5, 4.5, by = 0.01)
+  sd_2_vals <- seq(1.5, 4, by = 0.05)
 
   set.seed(1015)
 
@@ -209,7 +209,7 @@ if(param == "sd_2")
     sd_2   = sd_2_vals,
     lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1")],
     upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1")],
-    nprof  = 10, type = "sobol")
+    nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
