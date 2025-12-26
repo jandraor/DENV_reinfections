@@ -122,7 +122,7 @@ if(param == "rho")
 # log_A0------------------------------------------------------------------------
 if(param == "log_A0")
 {
-  log_A0_vals <- seq(1, 2, by = 0.005)
+  log_A0_vals <- seq(1, 1.7, by = 0.01)
 
   set.seed(0836)
 
@@ -130,7 +130,7 @@ if(param == "log_A0")
     log_A0 = log_A0_vals,
     lower  = box[1, c("lambda_1", "lambda_2", "rho", "phi", "sd_1", "sd_2")],
     upper  = box[2, c("lambda_1", "lambda_2", "rho", "phi", "sd_1", "sd_2")],
-    nprof  = 10, type = "sobol")
+    nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
@@ -145,11 +145,10 @@ if(param == "log_A0")
                                   n_indiv           = n_indiv)
 }
 
-
 # phi---------------------------------------------------------------------------
 if(param == "phi")
 {
-  phi_vals <- seq(5.3, 5.8, by = 0.002)
+  phi_vals <- seq(5.3, 5.8, by = 0.01)
 
   set.seed(2109)
 

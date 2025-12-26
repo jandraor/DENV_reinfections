@@ -2,12 +2,12 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J prof2lambda1
+#SBATCH -J proflik2
 #! Which project should be charged:
 #SBATCH -A DENGEN-SL2-CPU
 #SBATCH -D /home/ja850/rds/hpc-work/DENV_reinfections/  # working directory
-#SBATCH --output=prof2lambda1_%A.log
-#SBATCH --error=prof2lambda1_%A.err
+#SBATCH --output=proflik2_%A.log
+#SBATCH --error=proflik2_%A.err
 #SBATCH -p sapphire
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=110
@@ -17,9 +17,14 @@
 #SBATCH --time=12:00:00
 
 # Print job info
+echo "Job started at: $(date)"
 echo "Running on host: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 
 # run the script
-Rscript cluster_profile2.R lambda_1
+Rscript cluster_profile2.R "$1"
+
+echo "========================================"
+echo "Job finished at: $(date)"
+echo "========================================"
