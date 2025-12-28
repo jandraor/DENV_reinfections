@@ -27,7 +27,7 @@ box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
 
 plan(multisession, workers = availableCores())
 
-colnames <- c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1", "sd_2")
+colnames <- c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_total", "ratio")
 
 #-------------------------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
@@ -128,8 +128,8 @@ if(param == "log_A0")
 
   guesses_df <- profile_design(
     log_A0 = log_A0_vals,
-    lower  = box[1, c("lambda_1", "lambda_2", "rho", "phi", "sd_1", "sd_2")],
-    upper  = box[2, c("lambda_1", "lambda_2", "rho", "phi", "sd_1", "sd_2")],
+    lower  = box[1, setdiff(colnames, param)],
+    upper  = box[2, setdiff(colnames, param)],
     nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
