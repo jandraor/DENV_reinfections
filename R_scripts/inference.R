@@ -63,8 +63,8 @@ link_funs <- list(
   rho      = logit,
   log_A0   = log,
   phi      = log,
-  sd_1     = log,
-  sd_2     = log)
+  sd_total = log,
+  ratio    = log)
 
 inverse_link_funs <- list(
   lambda_1 = inv.logit,
@@ -72,8 +72,8 @@ inverse_link_funs <- list(
   rho      = inv.logit,
   log_A0   = exp,
   phi      = exp,
-  sd_1     = exp,
-  sd_2     = exp)
+  sd_total = exp,
+  ratio    = exp)
 
 
 get_starting_points <- function()
@@ -86,15 +86,15 @@ get_starting_points <- function()
               "rho"      = 0.001,
               "log_A0"   = 0.1,
               "phi"      = 1,
-              "sd_1"     = 0.01,
-              "sd_2"     = 0.01),
+              "sd_total" = 0.01,
+              "ratio"    = 0.01),
     upper = c("lambda_1" = 0.25,
               "lambda_2" = 0.25,
               "rho"      = 0.25,
               "log_A0"   = 4,
               "phi"      = 10,
-              "sd_1"     = 10,
-              "sd_2"     = 10),
+              "sd_total" = 10,
+              "ratio"    = 2),
     nseq =  200)
 
   for (nm in names(link_funs))
@@ -148,7 +148,13 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   phi     <- exp(pars[[5]])
   beta    <- 1
 
-  sd_vals <- exp(pars[6:7])
+  sd_total <- exp(pars[[6]])
+  ratio    <- exp(pars[[7]])
+
+  sd_1 <- sd_total * ratio / sqrt(1 + ratio^2)
+  sd_2 <- sd_total / sqrt(1 + ratio^2)
+
+  sd_vals <- c(sd_1, sd_2)
 
   # cat("\n---------------")
   # cat("\n lambda 1: ", lambdas[[1]])
@@ -156,8 +162,10 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   # cat("\n rho: ", rho)
   # cat("\n log A0: ", log_A0 )
   # cat("\n phi: ", phi)
+  # cat("\n sd_total: ", sd_total)
+  # cat("\n ratio: ", ratio)
   # cat("\n sd_val: ", sd_vals[[1]])
-  # cat("\n sd_val2: ", sd_vals[[2]])
+  # cat("\n sd_val2: ", sd_vals[[2]], "\n")
 
   n_replicates <- length(seed_vec)
 
