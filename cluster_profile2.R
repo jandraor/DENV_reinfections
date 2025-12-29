@@ -49,10 +49,9 @@ if(param == "lambda_1")
 
   profile_design(
     lambda_1  = lambda_1_vals,
-    lower = box[1, c("lambda_2", "rho", "log_A0", "phi", "sd_1", "sd_2")],
-    upper = box[2, c("lambda_2", "rho", "log_A0", "phi", "sd_1", "sd_2")],
-    nprof = 20, type = "sobol"
-  ) -> guesses_df
+    lower     = box[1, setdiff(colnames, param)],
+    upper     = box[2, setdiff(colnames, param)],
+    nprof     = 20, type = "sobol") -> guesses_df
 
   guesses_df <- guesses_df[, colnames]
 
@@ -65,7 +64,6 @@ if(param == "lambda_1")
                                  age_inf_data_list = age_inf_data_list,
                                  final_age_vctr    = final_age_vctr,
                                  n_indiv           = n_indiv)
-
 }
 # lambda 2----------------------------------------------------------------------
 if(param == "lambda_2")
@@ -76,8 +74,8 @@ if(param == "lambda_2")
 
   guesses_df <- profile_design(
     lambda_2  = lambda_2_vals,
-    lower = box[1, c("lambda_1", "rho", "log_A0", "phi", "sd_1", "sd_2")],
-    upper = box[2, c("lambda_1", "rho", "log_A0", "phi", "sd_1", "sd_2")],
+    lower = box[1, setdiff(colnames, param)],
+    upper = box[2, setdiff(colnames, param)],
     nprof = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
@@ -102,8 +100,8 @@ if(param == "rho")
 
   guesses_df <- profile_design(
     rho   = rho_vals,
-    lower = box[1, c("lambda_1", "lambda_2", "log_A0", "phi", "sd_1", "sd_2")],
-    upper = box[2, c("lambda_1", "lambda_2", "log_A0", "phi", "sd_1", "sd_2")],
+    lower = box[1, setdiff(colnames, param)],
+    upper = box[2, setdiff(colnames, param)],
     nprof = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
@@ -153,9 +151,9 @@ if(param == "phi")
   set.seed(2109)
 
   guesses_df <- profile_design(
-    phi = phi_vals,
-    lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "sd_1", "sd_2")],
-    upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "sd_1", "sd_2")],
+    phi    = phi_vals,
+    lower  = box[1, setdiff(colnames, param)],
+    upper  = box[2, setdiff(colnames, param)],
     nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
@@ -172,16 +170,16 @@ if(param == "phi")
 }
 
 # sd_1--------------------------------------------------------------------------
-if(param == "sd_1")
+if(param == "sd_total")
 {
-  sd_1_vals <- seq(2, 4, by = 0.05)
+  sd_total_vals <- seq(3.5, 4.6, by = 0.05)
 
   set.seed(2118)
 
   guesses_df <- profile_design(
-    sd_1   = sd_1_vals,
-    lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_2")],
-    upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_2")],
+    sd_total   = sd_total_vals,
+    lower  = box[1, setdiff(colnames, param)],
+    upper  = box[2, setdiff(colnames, param)],
     nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
@@ -198,17 +196,17 @@ if(param == "sd_1")
 }
 
 
-# sd_2--------------------------------------------------------------------------
-if(param == "sd_2")
+# ratio-------------------------------------------------------------------------
+if(param == "ratio")
 {
-  sd_2_vals <- seq(1.5, 4, by = 0.05)
+  ratio_vals <- seq(1.1, 1.7, by = 0.01)
 
   set.seed(1015)
 
   guesses_df <- profile_design(
-    sd_2   = sd_2_vals,
-    lower  = box[1, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1")],
-    upper  = box[2, c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_1")],
+    ratio  = ratio_vals,
+    lower  = box[1, setdiff(colnames, param)],
+    upper  = box[2, setdiff(colnames, param)],
     nprof  = 20, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
