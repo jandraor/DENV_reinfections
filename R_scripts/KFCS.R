@@ -51,7 +51,7 @@ KFCS_get_infection_df <- function()
            log_mean_start_DEN, log_mean_end_DEN, xgBoostPred) |>
     mutate(age_start    = as.numeric(start_interval - dateBirth2) / 365.25,
            age_end      = as.numeric(end_interval - dateBirth2) / 365.25,
-           age_round    = round((age_start + age_end) / 2),
+           age_round    = round(age_end),
            is_titre_inf = ifelse(xgBoostPred < 0.8, FALSE, TRUE))
 
   KFCS_PCR <-  KFCS_get_symp_infections()
