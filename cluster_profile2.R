@@ -172,7 +172,7 @@ if(param == "phi")
 # sd_1--------------------------------------------------------------------------
 if(param == "sd_total")
 {
-  sd_total_vals <- seq(3.5, 4.6, by = 0.05)
+  sd_total_vals <- seq(3.2, 4.6, by = 0.02)
 
   set.seed(2118)
 
@@ -199,7 +199,7 @@ if(param == "sd_total")
 # ratio-------------------------------------------------------------------------
 if(param == "ratio")
 {
-  ratio_vals <- seq(1.1, 1.7, by = 0.01)
+  ratio_vals <- seq(0.5, 1.7, by = 0.01)
 
   set.seed(1015)
 
@@ -207,7 +207,7 @@ if(param == "ratio")
     ratio  = ratio_vals,
     lower  = box[1, setdiff(colnames, param)],
     upper  = box[2, setdiff(colnames, param)],
-    nprof  = 20, type = "sobol")
+    nprof  = 12, type = "sobol")
 
   guesses_df <- guesses_df[, colnames]
 
