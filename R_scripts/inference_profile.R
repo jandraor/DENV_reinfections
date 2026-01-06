@@ -69,3 +69,30 @@ construct_profile <- function(starting_points, fixed_pos, titre_data_list,
     fixed_pos         = fixed_pos,
     n_indiv           = n_indiv)
 }
+
+format_profile_df <- function(obj_list, vals)
+{
+  param_profile_df <- map_df(obj_list, \(prof_obj) {
+
+    sol        <- prof_obj$solution
+    names(sol) <- setdiff(colnames, param)
+    ll_val     <- -prof_obj$objective
+
+    for(nm in names(sol))
+    {
+      sol[[nm]] <- inverse_link_funs[[nm]](sol[[nm]])
+    }
+
+    df_sol <- sol |> t() |> as.data.frame() |>
+      mutate(ll = ll_val)
+  }) |>
+    mutate(value = vals) |>
+    group_by(value) |>
+    filter(ll == max(ll)) |>
+    ungroup() |>
+    rename("{param}" := value)
+
+  param_profile_df <- param_profile_df[, c(colnames, "ll")]
+
+  param_profile_df
+}
