@@ -8,13 +8,13 @@
 #SBATCH -D /home/ja850/rds/hpc-work/DENV_reinfections/  # working directory
 #SBATCH --output=MLE_%A.log
 #SBATCH --error=MLE_%A.err
-#SBATCH -p icelake
+#SBATCH -p shappire
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=50
+#SBATCH --cpus-per-task=100
 #SBATCH --mem=64G
 #SBATCH --ntasks=1
 #! How much wallclock time will be required?
-#SBATCH --time=12:00:00
+#SBATCH --time=2:00:00
 
 # Print job info
 echo "Running on host: $(hostname)"
