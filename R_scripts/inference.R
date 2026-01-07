@@ -252,8 +252,7 @@ get_loglik_2 <- function()
                     "rho" ,
                     "log_A0" ,
                     "phi" ,
-                    "sd_total" ,
-                    "ratio")
+                    "sd")
 
     for (nm in names(inverse_link_funs))
     {

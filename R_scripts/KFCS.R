@@ -65,6 +65,8 @@ KFCS_get_infection_df <- function()
 
     df$PCR <- FALSE
 
+    df$serotype <- "Subclinical"
+
     if(nrow(subject_PCR) > 0)
     {
       PCR_dates <- subject_PCR$dateEvaluationA1
@@ -74,6 +76,7 @@ KFCS_get_infection_df <- function()
         function(i) any(PCR_dates >= df$start_interval[i] &
                           PCR_dates <= df$end_interval[i]))
 
+      df[df$PCR, "serotype"] <- subject_PCR$serotype
     }
 
     df
@@ -106,9 +109,18 @@ KFCS_get_symp_infections <- function()
 {
   KFCS_PCR <- read_csv("./data/KFCS/Analysis_Illness_20240722.csv",
                        show_col_types = FALSE) |>
-    select(subjectNo, dateEvaluationA1, pcrResult) |>
-    mutate(dateEvaluationA1 = ymd(dateEvaluationA1)) |>
-    filter(pcrResult == "Dengue")
+    filter(pcrResult == "Dengue") |>
+    select(subjectNo, dateEvaluationA1, pcrResult, contains("pcrDengueType")) |>
+    mutate(DEN_sum = rowSums(across(starts_with("pcrDengueType")))) |>
+    mutate(dateEvaluationA1 = ymd(dateEvaluationA1),
+           serotype = case_when(
+             pcrDengueTypeDEN1 == 1 & DEN_sum == 1 ~ "DENV-1",
+             pcrDengueTypeDEN2 == 1 & DEN_sum == 1 ~ "DENV-2",
+             pcrDengueTypeDEN3 == 1 & DEN_sum == 1 ~ "DENV-3",
+             pcrDengueTypeDEN4 == 1 & DEN_sum == 1 ~ "DENV-4",
+             TRUE ~ "Untyped/Mixed")) |>
+    select(-contains("pcrDengueType"))
+
 }
 
 KFCS_get_prob_symp_inf <- function()

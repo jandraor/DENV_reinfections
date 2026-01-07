@@ -27,7 +27,7 @@ box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
 
 plan(multisession, workers = availableCores())
 
-colnames <- c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd_total", "ratio")
+colnames <- c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd")
 
 #-------------------------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
@@ -120,7 +120,7 @@ if(param == "rho")
 # log_A0------------------------------------------------------------------------
 if(param == "log_A0")
 {
-  log_A0_vals <- seq(1, 1.7, by = 0.01)
+  log_A0_vals <- seq(1.1, 1.8, by = 0.01)
 
   set.seed(0836)
 
@@ -146,7 +146,7 @@ if(param == "log_A0")
 # phi---------------------------------------------------------------------------
 if(param == "phi")
 {
-  phi_vals <- seq(5.3, 5.8, by = 0.01)
+  phi_vals <- seq(5.4, 5.9, by = 0.01)
 
   set.seed(2109)
 
@@ -169,15 +169,15 @@ if(param == "phi")
                                   n_indiv           = n_indiv)
 }
 
-# sd_1--------------------------------------------------------------------------
-if(param == "sd_total")
+# sd----------------------------------------------------------------------------
+if(param == "sd")
 {
-  sd_total_vals <- seq(3.2, 4.6, by = 0.02)
+  sd_vals <- seq(2.6, 3.1, by = 0.01)
 
   set.seed(2118)
 
   guesses_df <- profile_design(
-    sd_total   = sd_total_vals,
+    sd_total   = sd_vals,
     lower  = box[1, setdiff(colnames, param)],
     upper  = box[2, setdiff(colnames, param)],
     nprof  = 20, type = "sobol")
@@ -189,33 +189,6 @@ if(param == "sd_total")
 
   prof6_objs <- construct_profile(starting_points   = sp_list,
                                   fixed_pos         = 6,
-                                  titre_data_list   = titre_data_list,
-                                  age_inf_data_list = age_inf_data_list,
-                                  final_age_vctr    = final_age_vctr,
-                                  n_indiv           = n_indiv)
-}
-
-
-# ratio-------------------------------------------------------------------------
-if(param == "ratio")
-{
-  ratio_vals <- seq(0.5, 1.7, by = 0.01)
-
-  set.seed(1015)
-
-  guesses_df <- profile_design(
-    ratio  = ratio_vals,
-    lower  = box[1, setdiff(colnames, param)],
-    upper  = box[2, setdiff(colnames, param)],
-    nprof  = 12, type = "sobol")
-
-  guesses_df <- guesses_df[, colnames]
-
-  # starting points(sp)
-  sp_list <- transpose(guesses_df)
-
-  prof7_objs <- construct_profile(starting_points   = sp_list,
-                                  fixed_pos         = 7,
                                   titre_data_list   = titre_data_list,
                                   age_inf_data_list = age_inf_data_list,
                                   final_age_vctr    = final_age_vctr,

@@ -58,7 +58,7 @@ NMC_get_infection_df <- function()
                       PCR_df, cutoff = 1.18) |>
       remove_multiple_measurements_in_a_year()
   }) |> select(subjectNo, collected_year, age, days_bleed, titre, log_mean,
-               PCR_infection, titre_infection, infection) |>
+               PCR_infection, titre_infection, infection, serotype) |>
     mutate(key = paste(subjectNo, collected_year, sep = "_"))
 
   # Individuals for whom it is not possible to determine whether there was

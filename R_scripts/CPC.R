@@ -66,18 +66,21 @@ CPC_get_infection_df <- function()
 
   CPC_infection_df <- imap_dfr(df_list, \(df, s_id) {
 
-    subject_PCR <- symp_df |> filter(subject_id == s_id)
+    subject_PCR <- symp_df |> filter(subject_id == s_id) |>
+      arrange(date_acute_blood)
 
     df$PCR <- FALSE
+
+    df$serotype <- "Subclinical"
 
     if(nrow(subject_PCR) > 0)
     {
       PCR_dates <- subject_PCR$date_acute_blood
 
-      df$PCR <- sapply(
-        seq_len(nrow(df)),
-        function(i) any(PCR_dates >= df$start_interval[i] &
-                          PCR_dates <= df$end_interval[i]))
+      df$PCR <- sapply(seq_len(nrow(df)),
+                       function(i) any(PCR_dates >= df$start_interval[i] &
+                                         PCR_dates <= df$end_interval[i]))
+      df[df$PCR, "serotype"] <- subject_PCR$Dengue_Nested_PCR
 
     }
 
