@@ -338,9 +338,45 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   mean_ll
 }
 
-get_loglik_2 <- function()
+get_loglik <- function()
 {
-  fldr <- "./saved_objects/inference/two_datasets/MLE"
+
+  fldr <- str_glue("./saved_objects/inference/one_dataset/MLE")
+
+  files <- list.files(path = fldr, pattern = "^opt")
+
+  sol_df <- map_df(files, \(fn) {
+
+    fp <- file.path(fldr, fn)
+
+    res <- readRDS(fp)
+
+    sol <- res$solution
+
+    status <- res$status
+
+    if(status == 5) return (NULL)
+
+    param_names <- c("lambda_1", "lambda_2", "rho")
+
+    names(sol) <- param_names
+
+    for (nm in param_names)
+    {
+      sol[[nm]] <- inverse_link_funs[[nm]](sol[[nm]])
+    }
+
+    as.data.frame(as.list(sol)) |>
+      mutate(ll = -res$objective)
+  })
+
+  sol_df
+}
+
+get_loglik_2 <- function(ds)
+{
+
+  fldr <- str_glue("./saved_objects/inference/two_datasets/MLE")
 
   files <- list.files(path = fldr, pattern = "^opt")
 
