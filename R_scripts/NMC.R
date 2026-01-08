@@ -47,7 +47,15 @@ NMC_get_infection_df <- function()
 {
   plac_df <- NMC_get_placebo_data()
 
+  plac_ids <- unique(plac_df$subjectNo)
+
   df_list <- split(plac_df, plac_df$subjectNo)
+
+  PCR_infections <- read_csv("./data/NMC/NMC_PCR_infections_manual.csv",
+                             show_col_types = FALSE) |>
+    arrange(subject_no)
+
+  plac_inf <- PCR_infections |> filter(subject_no %in% plac_ids)
 
   infection_df <- imap_dfr(df_list, \(f_df, id) {
 

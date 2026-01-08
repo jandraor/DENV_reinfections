@@ -1,0 +1,195 @@
+---
+title: "Fig 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(binom)
+library(dplyr)
+library(flavipack)
+library(lubridate)
+library(purrr)
+library(readr)
+library(stringr)
+library(tidyr)
+
+source("./R_scripts/cohort_utils.R")
+source("./R_scripts/CPC.R")
+source("./R_scripts/follow_up.R")
+source("./R_scripts/KFCS.R")
+source("./R_scripts/NMC.R")
+source("./R_scripts/plots.R")
+```
+
+# Fig 1A
+
+```{r}
+count_inf_df <- NMC_get_infection_df() |> filter(is_inf == 1) |> 
+  select(subjectNo, collected_year, serotype) |> 
+  mutate(serotype = ifelse(serotype == "Unknown", "Untyped/Mixed", serotype),
+         serotype = factor(serotype, levels = c(str_glue("DENV-{1:4}"), 
+                                                "Untyped/Mixed", "Subclinical"))) |> 
+  group_by(collected_year, serotype) |> 
+  summarise(n_inf   = n(),
+            .groups = "drop")
+
+fig_1A <- plot_1A(count_inf_df)
+
+fig_1A
+```
+
+# Fig 1B
+
+```{r}
+count_inf_df <- CPC_get_infection_df() |> filter(is_inf) |> 
+  mutate(collected_year = year(collection_date),
+         serotype       = str_replace(serotype, "DEN", "DENV-")) |> 
+  select(subject_id, collected_year, serotype) |> 
+  mutate(serotype = factor(serotype, 
+                           levels = c(str_glue("DENV-{1:4}"), 
+                                                "Untyped/Mixed", "Subclinical"))) |> 
+  group_by(collected_year, serotype) |> 
+  summarise(n_inf   = n(),
+            .groups = "drop")
+
+fig_1B <- plot_1B(count_inf_df)
+
+fig_1B
+```
+
+# Fig 1C
+
+```{r}
+count_inf_df <- KFCS_get_infection_df() |> filter(is_inf) |> 
+  mutate(collected_year = year(end_interval)) |> 
+  select(subjectNo, collected_year, serotype) |> 
+  mutate(serotype = factor(serotype, 
+                           levels = c(str_glue("DENV-{1:4}"), 
+                                                "Untyped/Mixed", "Subclinical"))) |> 
+  group_by(collected_year, serotype) |> 
+  summarise(n_inf   = n(),
+            .groups = "drop")
+
+fig_1C <- plot_1C(count_inf_df)
+
+fig_1C
+```
+
+# Fig 1D
+
+```{r}
+breaks <- c(1, 5, 10, 15, 20, 30, 40, 50, 60, Inf)
+labels <- c("0-4","5-9", "10-14","15-19", "20-29",
+            "30-39", "40-49", "50-59", "60+")
+
+#-------------------------------------------------------------------------------
+CPC_age_inf_df  <- CPC_get_prob_inf_at_age() |> filter(age >= 2) 
+
+CPC_age_bin_inf <- CPC_age_inf_df |>
+    mutate(age_bin = cut(age, 
+                       breaks = breaks,
+                       levels = levels)) |> 
+  group_by(age_bin) |> 
+  summarise(n_infections  = sum(n_infections),
+            n_individuals = sum(n_individuals)) |> 
+  mutate(pct    = n_infections / n_individuals,
+         cohort = "CPC")
+
+CPC_age_bin_inf  <- CPC_age_bin_inf |> add_binomial_CI() |> 
+  mutate(country = "PHL")
+#-------------------------------------------------------------------------------
+NMC_age_inf_df  <- NMC_get_prob_inf_at_age() |> filter(age >= 2) 
+
+NMC_age_bin_inf <- NMC_age_inf_df |> 
+  group_infections_in_bins(breaks, levels)
+
+NMC_age_bin_inf <- NMC_age_bin_inf |> add_binomial_CI() |> 
+  mutate(cohort = "NMC",
+         country = "PHL")
+#-------------------------------------------------------------------------------
+age_bin_inf <- bind_rows(CPC_age_bin_inf, NMC_age_bin_inf)
+
+# Needs Inference.Rmd to be run
+pred_df <- readRDS("./saved_objects/inference/one_dataset/pred.rds")[[2]] |> 
+  mutate(cohort = "CPC") |> 
+  rename(age_bin = age)
+
+fig_1D <- plot_1D(pred_df, age_bin_inf)
+fig_1D
+```
+
+# Fig 1E
+
+```{r}
+KFCS_age_inf_df  <- KFCS_get_prob_inf_at_age() |> filter(age_round >= 2) 
+
+KFCS_age_bin_inf <- KFCS_age_inf_df |> mutate(age_bin = cut(age_round, 
+                       breaks = breaks,
+                       levels = levels)) |> group_by(age_bin) |> 
+  summarise(n_infections  = sum(n_infections),
+            n_individuals = sum(n_individuals)) |> 
+  mutate(pct = n_infections / n_individuals,
+         cohort = "KFCS")
+
+KFCS_age_bin_inf <- KFCS_age_bin_inf |> add_binomial_CI() |> 
+  mutate(country = "THA")
+
+# Needs Inference.Rmd to be run
+pred_df <- readRDS("./saved_objects/inference/one_dataset/pred.rds")[[1]] |> 
+  mutate(cohort = "KFCS") |> 
+  rename(age_bin = age)
+
+fig_1E <- plot_1E(pred_df, KFCS_age_bin_inf)
+fig_1E
+```
+
+# Fig 1F
+
+```{r}
+CPC_symp_age_bins <- CPC_get_prob_symp_inf() |> 
+  filter(age >= 2) |> 
+  group_symp_infection_in_bins(breaks, labels) |> 
+  mutate(rr      = pct_symp / pct_symp[age_bin == "(1,5]"],
+         comp_rr = 1 - rr,
+         cohort  = "CPC",
+         country = "PHL") |> 
+  select(age_bin, country, cohort, rr) 
+
+KFCS_symp_age_bins <- KFCS_get_prob_symp_inf() |> 
+  filter(age_round >= 2) |> 
+  rename(age = age_round) |> 
+  group_symp_infection_in_bins(breaks, labels) |> 
+  mutate(rr      = pct_symp / pct_symp[age_bin == "(1,5]"],
+         cohort  = "KFCS",
+         country = "THA") |> 
+  select(age_bin, country, cohort, rr) 
+
+NMC_symp_age_bins <- NMC_get_prob_symp_inf() |> 
+  filter(age >= 2) |> 
+  group_symp_infection_in_bins(breaks, labels) |>
+  mutate(rr      = pct_symp / pct_symp[age_bin == "(1,5]"],
+         cohort  = "NMC",
+         country = "PHL") |> 
+  select(age_bin, country, cohort, rr) 
+
+symp_age_bins <- bind_rows(CPC_symp_age_bins,
+                           KFCS_symp_age_bins)
+
+fig_1F <- plot_1F(symp_age_bins, NMC_symp_age_bins)
+fig_1F
+```
+
+
+```{r, fig.width = 10, fig.height = 6}
+fig1 <- ((fig_1A | fig_1B | fig_1C) /
+           (fig_1D | fig_1E | fig_1F)) +
+  plot_annotation(tag_levels = 'A')
+
+ggsave(plot = fig1, "./plots/fig1.png", width = 10, height = 6,
+       create.dir = TRUE)
+fig1
+```
+
+
