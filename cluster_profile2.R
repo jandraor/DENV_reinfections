@@ -39,6 +39,13 @@ if (length(args) < 1) {
 param <- args[1]
 
 
+arg_list <- list(titre_data_list   = titre_data_list,
+                 age_inf_data_list = age_inf_data_list,
+                 final_age_vctr    = final_age_vctr,
+                 n_indiv           = n_indiv,
+                 ds                = "two_datasets")
+
+
 # lambda 1----------------------------------------------------------------------
 
 if(param == "lambda_1")
@@ -146,7 +153,7 @@ if(param == "log_A0")
 # phi---------------------------------------------------------------------------
 if(param == "phi")
 {
-  phi_vals <- seq(5.4, 5.9, by = 0.01)
+  phi_vals <- seq(5.7, 6.2, by = 0.01)
 
   set.seed(2109)
 
@@ -161,12 +168,10 @@ if(param == "phi")
   # starting points(sp)
   sp_list <- transpose(guesses_df)
 
-  prof5_objs <- construct_profile(starting_points   = sp_list,
-                                  fixed_pos         = 5,
-                                  titre_data_list   = titre_data_list,
-                                  age_inf_data_list = age_inf_data_list,
-                                  final_age_vctr    = final_age_vctr,
-                                  n_indiv           = n_indiv)
+  arg_list$fixed_pos       <- 5
+  arg_list$starting_points <- sp_list
+
+  prof5_objs <- do.call(construct_profile, arg_list)
 }
 
 # sd----------------------------------------------------------------------------
@@ -177,7 +182,7 @@ if(param == "sd")
   set.seed(2118)
 
   guesses_df <- profile_design(
-    sd_total   = sd_vals,
+    sd     = sd_vals,
     lower  = box[1, setdiff(colnames, param)],
     upper  = box[2, setdiff(colnames, param)],
     nprof  = 20, type = "sobol")
@@ -187,10 +192,8 @@ if(param == "sd")
   # starting points(sp)
   sp_list <- transpose(guesses_df)
 
-  prof6_objs <- construct_profile(starting_points   = sp_list,
-                                  fixed_pos         = 6,
-                                  titre_data_list   = titre_data_list,
-                                  age_inf_data_list = age_inf_data_list,
-                                  final_age_vctr    = final_age_vctr,
-                                  n_indiv           = n_indiv)
+  arg_list$fixed_pos       <- 6
+  arg_list$starting_points <- sp_list
+
+  prof6_objs <- do.call(construct_profile, arg_list)
 }
