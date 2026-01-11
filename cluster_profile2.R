@@ -50,28 +50,28 @@ arg_list <- list(titre_data_list   = titre_data_list,
 
 if(param == "lambda_1")
 {
-  lambda_1_vals <- seq(0.05, 0.065, by = 0.001)
+  lambda_1_vals <- seq(0.05, 0.06, by = 0.0002)
 
   set.seed(2174)
 
   profile_design(
     lambda_1  = lambda_1_vals,
-    lower     = box[1, setdiff(colnames, param)],
-    upper     = box[2, setdiff(colnames, param)],
-    nprof     = 20, type = "sobol") -> guesses_df
+    lower = box[1, setdiff(colnames, param)],
+    upper = box[2, setdiff(colnames, param)],
+    nprof = 20, type = "sobol"
+  ) -> guesses_df
 
   guesses_df <- guesses_df[, colnames]
 
   # starting points(sp)
   sp_list <- transpose(guesses_df)
 
-  prof_objs <- construct_profile(starting_points   = sp_list,
-                                 fixed_pos         = 1,
-                                 titre_data_list   = titre_data_list,
-                                 age_inf_data_list = age_inf_data_list,
-                                 final_age_vctr    = final_age_vctr,
-                                 n_indiv           = n_indiv)
+  arg_list$fixed_pos       <- 1
+  arg_list$starting_points <- sp_list
+
+  prof_objs <- do.call(construct_profile, arg_list)
 }
+
 # lambda 2----------------------------------------------------------------------
 if(param == "lambda_2")
 {
@@ -153,7 +153,7 @@ if(param == "log_A0")
 # phi---------------------------------------------------------------------------
 if(param == "phi")
 {
-  phi_vals <- seq(5.7, 6.2, by = 0.01)
+  phi_vals <- seq(5.9, 6.5, by = 0.01)
 
   set.seed(2109)
 
@@ -177,7 +177,7 @@ if(param == "phi")
 # sd----------------------------------------------------------------------------
 if(param == "sd")
 {
-  sd_vals <- seq(2.6, 3.1, by = 0.01)
+  sd_vals <- seq(2.5, 3.2, by = 0.01)
 
   set.seed(2118)
 
