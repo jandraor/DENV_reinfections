@@ -28,13 +28,12 @@ source("./R_scripts/bootstrap_utils.R")
 source("./R_scripts/cohort_utils.R")
 source("./R_scripts/CPC.R")
 source("./R_scripts/DGP.R")
-#source("./R_scripts/data_wrangling.R")
 source("./R_scripts/follow_up.R")
 source("./R_scripts/KFCS.R")
 source("./R_scripts/inference.R")
 source("./R_scripts/NMC.R")
-source("./R_scripts/plots_paper.R")
-#source("./R_scripts/utils.R")
+source("./R_scripts/plots.R")
+
 
 NMC_all  <- "#59979C"
 NMC_PCR  <- "#B2CABD"
@@ -43,19 +42,25 @@ CPC_clr  <- "#6E291C"
 DENV_1_4       <- c("#9AC4C5", "#7CA3CD", "#7260A8", "#ECEDE0") # Palette 880
 ```
 
-# Data 
+# Fig 2A
+
 
 ```{r}
-plac_df  <- NMC_get_placebo_data()
+plac_df <- NMC_get_placebo_data()
+fig_2A <- plot_2A(plac_df)
+fig_2A
+```
+
+
+# Fig 2B
+
+```{r}
 plac_ids <- unique(plac_df$subjectNo)
 
 PCR_infections <- read_csv("./data/NMC/NMC_PCR_infections_manual.csv", 
                            show_col_types = FALSE) |> 
   arrange(subject_no)
-plac_inf <- PCR_infections |> filter(subject_no %in% plac_ids)
-```
 
-```{r}
 plac_inf <- PCR_infections |> filter(subject_no %in% plac_ids)
 
 tol <- 365 # tolerance in days
@@ -207,28 +212,14 @@ new_df <- data.frame(baseline = seq(min(seropos_df$baseline),
 
 new_df$rise <- predict(fit, newdata = new_df)
 
+fig_2B <- plot_2B(result_df, new_df)
 
-fig2A <- ggplot(result_df |> 
-                  filter(!is.na(serostatus)), aes(baseline, rise)) +
-  geom_point(colour = NMC_PCR, aes(shape = serostatus)) +
-  labs(x = "Baseline (log2)", y = "Rise (log2)",
-       caption = str_glue("rise (seropositive) = {intc} - {slp} * baseline"),
-       shape = NULL) +
-  scale_y_continuous(limits = c(0, NA)) +
-  geom_line(data = new_df, aes(x = baseline, y = rise), colour = "grey50") +
-  theme_classic() +
-  theme(axis.line = element_line(colour = "grey75"),
-        legend.text = element_text(color = "grey55"),
-        legend.position = c(0.4, 0.25),
-        legend.direction = "vertical",
-        legend.margin = margin(t = 3, r = 3, b = 3, l = 3),
-        plot.caption = element_text(colour = "grey50"),
-        legend.background = element_rect(colour = "grey80", linewidth = 0.1))
+fig_2B
 
-fig2A
-
-ggsave("./plots/2A.png", width = 2.5, height = 2.5)
+ggsave("./plots/2B.png", width = 2.5, height = 2.5)
 ```
+
+# Fig 2C
 
 ```{r}
 symp_ids <- unique(result_df$subject_id)
@@ -311,20 +302,14 @@ post_inf_df <- map_df(symp_ids, \(id) {
 ```
 
 ```{r}
-fig2B <- ggplot(post_inf_df, aes(years_post_peak, titre)) +
-  geom_line(aes(group = inf_id), colour = "grey70", alpha = 0.5) +
-  geom_smooth(se = FALSE, colour = NMC_PCR, linewidth = 1.5) +
-  scale_y_continuous(limits = c(0, NA)) +
-  labs(x = "Years post-infection", y = "Titre (log2)") +
-  theme_classic() +
-  theme(axis.line = element_line(colour = "grey75"))
+fig_2C <- plot_2C(post_inf_df) 
 
-fig2B
+fig_2C
 
-ggsave("./plots/2B.png", width = 4, height = 2.5)
+ggsave("./plots/2C.png", width = 4, height = 2.5)
 ```
 
-##  Fig 2C
+#  Fig 2D
 
 ```{r}
 infection_detection_df <- NMC_get_infection_df()
@@ -351,29 +336,6 @@ delta_df <- map_df(df_list, \(df)
 NMC_mean_estimates <- delta_df |> add_bootstrap_CI("NMC")
 ```
 
-
-```{r}
-infection_PCR_df <- infection_detection_df |> group_by(subjectNo) |> 
-  mutate(inf_idx = cumsum(PCR_infection),
-         inf_id  = paste(subjectNo, inf_idx, sep = "_")) |> 
-  ungroup()
-
-df_list <- split(infection_PCR_df, infection_PCR_df$inf_id)
-
-delta_df_PCR <- map_df(df_list, \(df)
-{
-  df <- filter_short_term_dynamics(df, plac_inf, 365)
-  
-  if(nrow(df) <= 1) return(NULL)
-  
-  estimate_delta_times(df)
-}) |> mutate(delta_year = delta_time / 365,
-             bin_delta  = round(delta_year, 0)) |> 
-  filter(bin_delta > 0)
-
-NMC_mean_estimates_PCR <- delta_df_PCR |> add_bootstrap_CI("NMC")
-```
-
 ```{r}
 KFCS_infection_detection_df <- KFCS_get_infection_df()
 
@@ -393,39 +355,22 @@ KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI("KFCS") |>
   filter(bin_delta > 0)
 ```
 
-```{r}
-KFCS_PCR_infection_df <- KFCS_infection_detection_df |>
-  group_by(subjectNo) |> 
-  arrange(subjectNo, start_interval) |> 
-  mutate(inf_idx = cumsum(PCR),
-         inf_id  = paste(subjectNo, inf_idx, sep = "_")) |> 
-  ungroup()
-
-df_list <- split(KFCS_PCR_infection_df, KFCS_PCR_infection_df$inf_id)
-
-KFCS_delta_PCR_df <- map_df(df_list, KFCS_estimate_deltas_PCR) |> 
-  mutate(bin_delta  = round(delta_time, 0)) 
-
-KFCS_PCR_mean_estimates <- KFCS_delta_PCR_df  |> add_bootstrap_CI("KFCS") |>
-  filter(bin_delta > 0)
-```
-
 ```{r f2C}
-mean_estimates     <- bind_rows(KFCS_mean_estimates, NMC_mean_estimates)
+mean_estimates <- bind_rows(KFCS_mean_estimates, NMC_mean_estimates)
 
-PCR_mean_estimates <- bind_rows(KFCS_PCR_mean_estimates,
-                                NMC_mean_estimates_PCR)
-  
-fig2C <- plot_2C(mean_estimates, PCR_mean_estimates, NMC_all, NMC_PCR)
-ggsave("./plots/2C.png", width = 2.5, height = 2.5)
-fig2C
+fig_2D <- plot_2D(mean_estimates)
+ggsave("./plots/2D.png", width = 2.5, height = 2.5)
+fig_2D
 ```
 
-## Fig 2D
+## Fig 2E
 
 ```{r}
 KFCS_decay <- KFCS_get_infection_df() |> 
-  filter(!is_inf) |> 
+  filter(
+    !is_inf,
+    log_mean_end_DEN > log(5),
+    log_mean_start_DEN > log(5)) |> 
   mutate(titre_diff = log_mean_end_DEN - log_mean_start_DEN,
          time_diff  = as.numeric(end_interval - start_interval) / 365.25,
          slope      = titre_diff / time_diff)|> 
@@ -434,7 +379,9 @@ KFCS_decay <- KFCS_get_infection_df() |>
          between(time_diff, 0.9, 2))
 
 
-ages <- KFCS_decay |> filter(age <= 76) |> pull(age) |> unique() |>
+ages <- KFCS_decay |> 
+  filter(age <= 76) |> 
+  pull(age) |> unique() |>
   sort()
 
 min_age <- ages[2]
@@ -477,6 +424,7 @@ decay_df <- imap_dfr(df_list, \(df, i) {
   df |>
     mutate(prev_log_mean  = lag(log_mean),
            prev_log_mean  = ifelse(prev_log_mean == log(5), NA, prev_log_mean),
+           log_mean       = ifelse(log_mean == log(5), NA, log_mean),
            titre_diff     = log_mean - prev_log_mean,
            time_diff      = (days_bleed - lag(days_bleed)) / 365,
            slope          = titre_diff / time_diff) |> 
@@ -515,408 +463,67 @@ cohorts_decay_df <- NMC_decay_moving_avg_df |>
   mutate(cohort = "NMC") |> 
   bind_rows(KFCS_decay_moving_avg_df)
 
-fig2D <- plot_2D(cohorts_decay_df, KFCS_clr, NMC_all)
+sim_decay_rate <- readRDS("./saved_objects/inference/two_datasets/pred_avg_decay.rds")
 
-fig2D
+fig_2E <- plot_2E(cohorts_decay_df, sim_decay_rate)
 
-ggsave("./plots/2D.png", width = 2.5, height = 2.5)
-```
+ggsave("./plots/2E.png", width = 2.5, height = 2.5)
 
-# Fig 2E
-
-```{r}
-CPC_titre  <- CPC_get_tidy_data() |> filter(age >= 2)
-
-CPC_avg_titre <- CPC_titre |> group_by(age) |> summarise(mean = mean(log2_mean))
-
-NMC_avg_titre <- plac_df |> group_by(age) |> summarise(mean = mean(log2_mean))
-
-KFCS_titre_df <- KFCS_get_titre_data() |> filter(age >= 2)
-
-KFCS_avg_titre <- KFCS_titre |> group_by(age) |> 
-  summarise(mean = mean(log2_mean))
-```
-
-```{r}
-fig2E <- plot_2E(CPC_titre, plac_df, KFCS_titre_df,
-                 CPC_avg_titre, NMC_avg_titre, KFCS_avg_titre,
-                 CPC_clr, NMC_all, KFCS_clr)
-
-ggsave(filename = "./plots/2E.png", width = 3, height = 2.5)
-
-fig2E
+fig_2E
 ```
 
 # Fig 2F
 
 ```{r}
-breaks <- c(1, 5, 10, 15, 20, 30, 40, 50, 60, Inf)
-labels <- c("0-4","5-9", "10-14","15-19", "20-29",
-            "30-39", "40-49", "50-59", "60+")
-```
+CPC_titre  <- CPC_get_tidy_data() |> filter(age >= 2)
 
-```{r}
-CPC_age_inf_df <- CPC_get_prob_inf_at_age() |> filter(age >= 2) 
-final_age_1    <- CPC_age_inf_df$age |> max()
-
-KFCS_age_inf_df <- KFCS_get_prob_inf_at_age() |> filter(age_round >= 2) 
-final_age_2     <- KFCS_age_inf_df$age_round |> max()
-
-NMC_age_inf_df <- NMC_get_prob_inf_at_age() |> filter(age >= 2) 
-```
-
-```{r}
-KFCS_age_bin_inf <- KFCS_age_inf_df |> mutate(age_bin = cut(age_round, 
-                       breaks = breaks,
-                       levels = levels)) |> group_by(age_bin) |> 
-  summarise(n_infections  = sum(n_infections),
-            n_individuals = sum(n_individuals)) |> 
-  mutate(pct = n_infections / n_individuals,
-         cohort = "KFCS")
-
-CPC_age_bin_inf <- CPC_age_inf_df |>
-    mutate(age_bin = cut(age, 
-                       breaks = breaks,
-                       levels = levels)) |> 
-  group_by(age_bin) |> 
-  summarise(n_infections  = sum(n_infections),
-            n_individuals = sum(n_individuals)) |> 
-  mutate(pct    = n_infections / n_individuals,
-         cohort = "CPC")
-
-NMC_age_bin_inf <- NMC_age_inf_df |> 
-  group_infections_in_bins(breaks, levels)
-```
-
-## Inference
-
-### MLE
-
-
-```{r MLE_inits}
-loglik_df <- find_MLE(CPC_age_inf_df, KFCS_age_inf_df,
-                      final_age_1, final_age_2) |> 
-  filter(convergence == 0)
-  
-    
-MLE_df <- loglik_df |> filter(ll == max(ll))
-
-fn <- "./saved_objects/inference/MLE/MLE_estimate.rds"
-
-if(!file.exists(fn)) saveRDS(MLE_df, fn)
-
-lambda_1_MLE <- MLE_df |> pull(lambda_1_MLE)
-lambda_2_MLE <- MLE_df |> pull(lambda_2_MLE)
-rho_MLE      <- MLE_df |> pull(rho_MLE)
-
-MLE_vals <- c(lambda_1_MLE, lambda_2_MLE, rho_MLE)
-```
-
-### Profile likelihood
-
-```{r}
-L_max        <- MLE_df |> pull(ll)
-alpha        <- 0.05
-cutoff_value <- L_max - 0.5 * qchisq(1 - alpha, df = 1)
-```
-
-```{r}
-lambda_1_vals <- seq(0.05, 0.15, by = 0.00025)
-
-profile_lambda_1_df <- maximise_over_profile(lambda_1_vals,
-                                             par_name    = "lambda_1",
-                                             MLE_vals    = MLE_vals,
-                                             fixed_pos   = 1,
-                                             data_df1    = CPC_age_inf_df,
-                                             data_df2    = KFCS_age_inf_df,
-                                             final_age_1 = final_age_1,
-                                             final_age_2 = final_age_2) |> 
-  filter(convergence == 0)
-
-tidy_lambda_1 <- profile_lambda_1_df |> 
-  select(lambda_1_MLE, ll) |> 
-  rename(value = lambda_1_MLE) |> 
-  mutate(par_name = "lambda[CPC]")
-
-CI_vals <- tidy_lambda_1 |> filter(ll >= cutoff_value) |> 
-  pull(value) |> range()
-
-CI_lambda_1 <- data.frame(par_name = "lambda[CPC]", 
-                          x        = 0.12,
-                          ll       = CI_vals[[1]], 
-                          ul       = CI_vals[[2]],
-                          prc      = 0.1) 
-```
-
-```{r}
-lambda_2_vals <- seq(0.04, 0.08, by = 0.0001)
-
-profile_lambda_2_df <- maximise_over_profile(lambda_2_vals,
-                                             par_name    = "lambda_2",
-                                             MLE_vals    = MLE_vals,
-                                             fixed_pos   = 2,
-                                             data_df1    = CPC_age_inf_df,
-                                             data_df2    = KFCS_age_inf_df,
-                                             final_age_1 = final_age_1,
-                                             final_age_2 = final_age_2) |>
-  filter(convergence == 0) 
-  
-tidy_lambda_2 <- profile_lambda_2_df |> 
-  select(lambda_2_MLE, ll) |> 
-  rename(value = lambda_2_MLE) |> 
-  mutate(par_name = "lambda[KFCS]")
-
-CI_vals <- tidy_lambda_2 |> filter(ll >= cutoff_value) |> 
-  pull(value) |> range()
-
-CI_lambda_2 <- data.frame(par_name = "lambda[KFCS]", 
-                          x = 0.065,
-                          ll  = CI_vals[[1]], 
-                          ul  = CI_vals[[2]],
-                          prc = 0.1) 
-```
-
-```{r}
-rho_vals <- seq(0.002, 0.012, by = 0.000025)
-
-profile_rho_df <- maximise_over_profile(rho_vals,
-                                        par_name    = "rho",
-                                        MLE_vals    = MLE_vals,
-                                        fixed_pos   = 3,
-                                        data_df1    = CPC_age_inf_df,
-                                        data_df2    = KFCS_age_inf_df,
-                                        final_age_1 = final_age_1,
-                                        final_age_2 = final_age_2) |>
-  filter(convergence == 0)
-  
-tidy_rho_df <-  profile_rho_df |>  
-  select(rho_MLE, ll) |> 
-  rename(value = rho_MLE) |> 
-  mutate(par_name = "rho")
-
-CI_vals <- tidy_rho_df |> filter(ll >= cutoff_value) |> 
-  pull(value) |> range()
-
-CI_rho <- data.frame(par_name = "rho", 
-                     ll = CI_vals[[1]], 
-                     ul = CI_vals[[2]],
-                     x   = 0.00925,
-                     prc = 0.1) 
-```
-
-```{r, fig.width = 7}
-profile_df <- bind_rows(tidy_lambda_1, 
-                        tidy_lambda_2, 
-                        tidy_rho_df) |> 
-  filter(ll >= -420)
-
-CI_df      <- bind_rows(CI_lambda_1, CI_lambda_2, CI_rho) |> 
-  mutate(label = str_glue("95% CI: {percent(ll, prc)}-{percent(ul, prc)}"))
-
-ggplot(profile_df, aes(value, ll)) +
-  geom_point(shape = 1, colour = "steelblue") +
-  geom_smooth(se = FALSE, colour = scales::alpha("grey50", 0.25)) +
-  geom_hline(yintercept = cutoff_value, linetype = "dotted", 
-             colour = "grey50") +
-  geom_text(data = CI_df, aes(label = label, x = x), y = -409.5, size = 2.5) +
-  facet_wrap(~par_name, labeller = label_parsed, scales = "free_x") +
-  scale_x_continuous(label = label_percent(), n.breaks = 3) +
-  scale_y_continuous(limits = c(NA, -409.5)) +
-  theme_classic() +
-  labs(x = "Value", y = "Log-likelihood") +
-  theme(axis.line = element_line(colour = "grey60"),
-        strip.background = element_rect(colour = "grey60"))
-```
-```{r}
-ll_obj <- list(loglik_df, profile_lambda_1_df,
-               profile_lambda_2_df, profile_rho_df)
-
-# database
-db_df <- map_df(ll_obj, \(df) {
-  df        <- select(df, contains("MLE"), ll)
-  names(df) <- gsub("_MLE", "", names(df))
-  df
-}) |>
-  filter(ll > max(ll, na.rm = T) - 3.5) |> 
-  select(-ll)
-
-sapply(db_df, function(col) {
-  min_col <- min(col)
-}) -> lower_lims
-
-sapply(db_df, function(col) {
-  max_col <- max(col)
-}) -> upper_lims
-
-set.seed(1115)
-
-param_list <- sobol_design(lower = lower_lims,
-                           upper = upper_lims,
-                           nseq  = 100) |> 
-  transpose()
-```
-
-
-```{r}
-cohort_df1 <- CPC_get_infection_df() |> 
-  select(subject_id, age) |> 
-  mutate(subject_id = as.factor(subject_id) |> as.numeric()) |> 
-  rename(age_sample = age) |> 
-  filter(age_sample >= 2)
-
-cohort_df2 <- KFCS_get_infection_df() |> 
-  mutate(subject_id = as.factor(subjectNo) |> as.numeric()) |> 
-  select(subject_id, age_round) |> 
-  rename(age_sample = age_round) |> 
-  filter(age_sample >= 2)
-
-n_cores <- future::availableCores() - 1
-plan(multisession, workers = n_cores)
-
-set.seed(1349)
-
-unweighted_predictions <- future_imap(param_list[1:20], \(param_obj, i)
-{
-  ll_val <- loglik_2_cohorts(logit(as.numeric(param_obj)), 
-                           CPC_age_inf_df, 
-                           KFCS_age_inf_df,
-                           final_age_1,
-                           final_age_2,
-                           1e5)
-  
-  sim_results <- lapply(1:100, simulate_two_cohorts,
-                        param_obj  = param_obj,
-                        cohort_df1 = cohort_df1,
-                        cohort_df2 = cohort_df2,
-                        breaks     = breaks,
-                        labels     = labels,
-                        ll_val     = ll_val)
-  
-  prediction_cohort_1 <- map_df(sim_results, "cohort_1") |> 
-    mutate(par_group_id = i)
-  
-  prediction_cohort_2 <- map_df(sim_results, "cohort_2") |> 
-    mutate(par_group_id = i)
-  
-  list(prediction_cohort_1 = prediction_cohort_1,
-       prediction_cohort_2 = prediction_cohort_2)
-  
-}, .options = furrr_options(seed = TRUE))
-```
-
-```{r}
-wquant <- function (x, weights, probs = c(0.025,0.25, 0.5, 0.75, 0.975)) {
-  idx <- order(x)
-  x <- x[idx]
-  weights <- weights[idx]
-  w <- cumsum(weights)/sum(weights)
-  rval <- approx(w, x, probs, rule = 1)
-  rval$y
-}
-
-sims_CPC <- map_df(unweighted_predictions, "prediction_cohort_1") |> 
-  mutate(weight = exp(log_lik - mean(log_lik))) 
-
-df_list <- split(sims_CPC, sims_CPC$age_bin)
-
-CPC_pred <- map_df(df_list, \(df) {
-  quantiles <- wquant(df$pct, df$weight)
-  
-  data.frame(age_bin = unique(df$age_bin),
-             value   = quantiles,
-             type = c("q2.5", "q25", "q50", "q75", "q97.5"))
-}) |> pivot_wider(names_from = type, values_from = value) |> 
-  mutate(cohort  = "CPC",
+CPC_avg_titre <- CPC_titre |> group_by(age) |> 
+  summarise(n_individuals = n(),
+            mean          = mean(log2_mean),
+            median        = median(log2_mean),
+            sd            = sd(log2_mean)) |> 
+  mutate(SE = sd / sqrt(n_individuals),
+         cohort = "CPC",
          country = "PHL")
 
-sims_KFCS <- map_df(unweighted_predictions, "prediction_cohort_2") |> 
-  mutate(weight = exp(log_lik - mean(log_lik))) 
-
-df_list <- split(sims_KFCS, sims_KFCS$age_bin)
-
-KFCS_pred <- map_df(df_list, \(df) {
-  quantiles <- wquant(df$pct, df$weight)
-  
-  data.frame(age_bin = unique(df$age_bin),
-             value   = quantiles,
-             type = c("q2.5", "q25", "q50", "q75", "q97.5"))
-}) |> pivot_wider(names_from = type, values_from = value) |> 
-  mutate(cohort  = "KFCS",
-         country = "THA")
-
-dodge_width <- 0
-
-pred_df     <- bind_rows(CPC_pred, KFCS_pred)
-
-CPC_age_bin_inf  <- CPC_age_bin_inf |> add_binomial_CI() |> 
-  mutate(country = "PHL")
-
-KFCS_age_bin_inf <- KFCS_age_bin_inf |> add_binomial_CI() |> 
-  mutate(country = "THA")
-
-NMC_age_bin_inf <- NMC_age_bin_inf |> add_binomial_CI() |> 
-  mutate(cohort = "NMC",
-         country = "PHL")
-
-age_bin_inf <- bind_rows(CPC_age_bin_inf, KFCS_age_bin_inf,
-                         NMC_age_bin_inf)
-
-fig_2F_1 <- plot_2F_1(pred_df, age_bin_inf, CPC_clr, KFCS_clr)
-
-fig_2F_1
-```
-
-```{r}
-CPC_symp_age_bins <- CPC_get_prob_symp_inf() |> 
-  filter(age >= 2) |> 
-  group_symp_infection_in_bins(breaks, labels) |> 
-  rename(symptomatic = pct_symp) |> 
-  mutate(subclinical = 1 - symptomatic,
-         cohort  = "CPC",
-         country = "PHL") |> 
-  select(age_bin, country, cohort, symptomatic, subclinical) |> 
-  pivot_longer(c(-age_bin, -cohort, -country))
-
-KFCS_symp_age_bins <- KFCS_get_prob_symp_inf() |> 
-  filter(age_round >= 2) |> 
-  rename(age = age_round) |> 
-  group_symp_infection_in_bins(breaks, labels) |> 
-  rename(symptomatic = pct_symp) |> 
-  mutate(subclinical = 1 - symptomatic,
-         cohort  = "KFCS",
-         country = "THA") |> 
-  select(age_bin, country, cohort, symptomatic, subclinical) |> 
-  pivot_longer(c(-age_bin, -cohort, -country))
-
-NMC_symp_age_bins <- NMC_get_prob_symp_inf() |> 
-  filter(age >= 2) |> 
-  group_symp_infection_in_bins(breaks, labels) |>
-  rename(symptomatic = pct_symp) |> 
-  mutate(subclinical = 1 - symptomatic,
+NMC_avg_titre <- plac_df |> group_by(age) |> 
+  summarise(mean = mean(log2_mean)) |> 
+  mutate(mean = 0.72 * mean,
          cohort  = "NMC",
          country = "PHL")
 
-symp_age_bins <- bind_rows(CPC_symp_age_bins,
-                           KFCS_symp_age_bins) |> 
-  mutate(key = paste(cohort, name, sep = "_"))
+KFCS_titre_df <- KFCS_get_titre_data() |> filter(age >= 2) 
 
-fig_2F_2 <- plot_2F_2(symp_age_bins, NMC_symp_age_bins)
-
-fig_2F_2
+KFCS_avg_titre <- KFCS_titre_df |> group_by(age) |> 
+  summarise(n_individuals = n(),
+            mean   = mean(log2_mean),
+            median = median(log2_mean),
+            sd   = sd(log2_mean)) |> 
+  mutate(SE = sd / sqrt(n_individuals),
+         cohort = "KFCS",
+         country = "THA")
 ```
 
-```{r plot_2F, fig.width = 3, fig.height = 3}
-fig2F <- fig_2F_1 / fig_2F_2
+```{r}
+pred_list <- readRDS("./saved_objects/inference/two_datasets/pred_avg_titre.rds")
+
+pred_list[[1]] <- pred_list[[1]] |> mutate(cohort = "KFCS", country = "THA")
+pred_list[[2]] <- pred_list[[2]] |> mutate(cohort = "CPC", country = "PHL")
+
+pred_df <- bind_rows(pred_list)
+
+titre_data_df <- bind_rows(CPC_avg_titre, NMC_avg_titre, KFCS_avg_titre)
+
+fig_2F <- plot_2F(pred_df, titre_data_df)
 
 ggsave(filename = "./plots/2F.png", width = 3, height = 2.5)
 
-fig2F
+fig_2F
 ```
 
-```{r, fig.width  = 10, fig.height = 6}
-library(patchwork)
 
-fig2 <- ((fig2A|fig2B|fig2C) / (fig2D | fig2E | fig2F)) + 
+```{r, fig.width  = 10, fig.height = 6}
+fig2 <- ((fig_2A | fig_2B | fig_2C) / (fig_2D | fig_2E | fig_2F)) + 
   plot_annotation(tag_levels = 'A')
 
 ggsave(plot = fig2, "./plots/fig2.pdf", width = 10, height = 6,
@@ -927,3 +534,4 @@ ggsave(plot = fig2, "./plots/fig2.png", width = 10, height = 6,
 
 fig2
 ```
+

@@ -7,8 +7,7 @@ plot_1A <- function(df)
     scale_fill_manual(values = c(DENV_1_4, untyped, subclinical)) +
     theme(legend.position = c(0.85, 0.8),
           legend.key.size = unit(0.4, "cm"),
-          legend.text = element_text(size = 5, colour = "grey25"),
-          plot.subtitle = element_text(colour = "grey55"))
+          legend.text = element_text(size = 5, colour = "grey25"))
 }
 
 plot_1B <- function(df)
@@ -23,8 +22,7 @@ plot_1B <- function(df)
                                  "DENV-3" = DENV_1_4[3],
                                  "DENV-4" = DENV_1_4[4],
                                  "Subclinical" = subclinical)) +
-    theme(legend.position = "none",
-          plot.subtitle = element_text(colour = "grey55"))
+    theme(legend.position = "none")
 }
 
 plot_1C <- function(df)
@@ -35,8 +33,7 @@ plot_1C <- function(df)
          fill = NULL) +
     scale_fill_manual(values = c(DENV_1_4, untyped, subclinical)) +
     theme(legend.position = "none",
-          legend.text = element_text(size = 8, colour = "grey25"),
-          plot.subtitle = element_text(colour = "grey55"))
+          legend.text = element_text(size = 8, colour = "grey25"))
 }
 
 plot_1D <- function(sim_df, data_df)
@@ -64,8 +61,7 @@ plot_1D <- function(sim_df, data_df)
     theme(axis.line = element_line(colour = "grey75"),
           axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
           plot.caption = element_text(colour = "grey65"),
-          legend.position = "none",
-          plot.subtitle = element_text(colour = "grey55"))
+          legend.position = "none")
 
 }
 
@@ -90,8 +86,7 @@ plot_1E <- function(sim_df, data_df)
     theme(axis.line = element_line(colour = "grey75"),
           axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
           plot.caption = element_text(colour = "grey65"),
-          legend.position = "none",
-          plot.subtitle = element_text(colour = "grey55"))
+          legend.position = "none")
 
 }
 
