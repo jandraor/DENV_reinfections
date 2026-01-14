@@ -165,27 +165,6 @@ get_starting_points <- function(ds)
   start_list
 }
 
-
-estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
-                                      phi, beta, inf_times_list, final_age)
-{
-  titre_mat <- simulate_DENV_long_decay_titres(
-    inf_times_list = inf_times_list,
-    log_first_peak = log_first_peak,
-    decay_rate_vec = decay_rate,
-    phi            = phi,
-    beta           = beta,
-    final_age      = final_age)
-
-  titre_mat[titre_mat < 10] <- 5
-
-  log2_titre_mat <- log2_transform(titre_mat)
-
-  avg_titre <- colMeans(log2_titre_mat)
-
-  avg_titre
-}
-
 log_lik_prob_inf <- function(pars, age_inf_data_list, final_age_vctr, n_indiv,
                              seed_vec)
 {

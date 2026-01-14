@@ -6,18 +6,15 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 
 library(binom)
 library(boot)
 library(dplyr)
 library(flavipack)
-library(furrr)
 library(ggplot2)
 library(lubridate)
 library(patchwork)
-library(pomp)
-library(progressr)
 library(purrr)
 library(readr)
 library(scales)

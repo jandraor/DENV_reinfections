@@ -25,3 +25,25 @@ simulate_two_cohorts <- function(iter_val, param_obj, cohort_df1, cohort_df2,
 
   list(cohort_1 = age_inf_1, cohort_2 = age_inf_2)
 }
+
+estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
+                                      phi, beta, inf_times_list, final_age)
+{
+  titre_mat <- simulate_DENV_long_decay_titres(
+    inf_times_list = inf_times_list,
+    log_first_peak = log_first_peak,
+    decay_rate_vec = decay_rate,
+    phi            = phi,
+    beta           = beta,
+    final_age      = final_age)
+
+  titre_mat[titre_mat < 10] <- 5
+
+  log2_titre_mat <- log2_transform(titre_mat)
+
+  avg_titre <- colMeans(log2_titre_mat)
+
+  avg_titre
+}
+
+get_decay_rate <- function() 0.3 * exp(-0.5*(0:3))

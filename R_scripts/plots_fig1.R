@@ -90,24 +90,29 @@ plot_1E <- function(sim_df, data_df)
 
 }
 
-plot_1F <- function(df, df2)
+plot_1F <- function(df)
 {
-  ggplot(df, aes(age_bin, rr)) +
-    geom_bar(
-      stat = "identity",
-      position = "stack",
-      aes(fill = cohort)) +
-    geom_point(data = df2, aes(age_bin, rr),
-               colour = NMC_all) +
-    facet_wrap(~country, nrow = 1) +
+  df <- df |>
+    mutate(undef = ifelse(RR == 0, TRUE, FALSE),
+           RR_plot = ifelse(undef, 0.02, RR)) # 0.02 arbitrary for plotting
+
+  ggplot(df, aes(age_bin, RR_plot)) +
+    geom_point(aes(color = cohort, shape = undef),
+               position = position_dodge(width = 0.6)) +
+    scale_y_log10() +
+    geom_errorbar(aes(ymin = q2.5, ymax = q97.5, group = cohort,
+                      colour = cohort),
+                  position = position_dodge(width = 0.6),
+                  width = 0) +
     scale_x_discrete(labels = labels) +
-    scale_fill_manual(values = c("KFCS" = KFCS_clr, "CPC" = CPC_clr)) +
+    scale_colour_manual(values = c("KFCS" = KFCS_clr, "CPC" = CPC_clr,
+                                   "NMC" = NMC_all)) +
+
+    scale_shape_manual(values = c(`FALSE` = 16, `TRUE`  = 1)) +
     labs(x = "Age group",
-         y = "Relative risk (vs 0–4)") +
+         y = "Relative risk (vs 0–9)") +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5,
                                      size = 6),
-          legend.position = "none",
-          strip.background = element_blank(),
-          strip.text = element_blank())
+          legend.position = "none")
 
 }

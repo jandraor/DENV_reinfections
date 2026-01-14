@@ -11,6 +11,7 @@ library(readr)
 library(stringr)
 library(tidyr)
 
+source("./R_scripts/DGP.R")
 source("./R_scripts/inference.R")
 
 data_obj <- get_inference_data()

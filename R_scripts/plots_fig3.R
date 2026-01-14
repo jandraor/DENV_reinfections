@@ -11,36 +11,30 @@ plot_3A <- function(df, label_df, clrs, linetype_vctr)
          linetype = NULL) +
     scale_colour_manual(values = clrs) +
     scale_linetype_manual(values = linetype_vctr) +
-    theme_classic() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-          axis.line = element_line(colour = "grey65"),
-          axis.title = element_text(colour = "grey55"),
-          legend.position = "none")
+    theme(legend.position = "none")
 }
 
 plot_3B <- function(df, clr_vctr, linetype_vct)
 {
-  ggplot(df, aes(age, meas)) +
-    geom_line(aes(age, mean, colour = scenario_lbl, linetype = scenario_lbl),
+  ggplot(df, aes(age, mean_titre)) +
+    geom_line(aes(colour = as.factor(scenario),
+                  linetype = as.factor(scenario)),
               linewidth =  1.2) +
-    scale_colour_manual(values = c(clr_dgm, clr_reinf, clr_reinf, "#C7CEAC")) +
+    scale_colour_manual(values = clr_vctr) +
     scale_linetype_manual(values = c("solid", "11", "solid", "solid")) +
     scale_y_continuous(limits = c(0, NA)) +
     guides(colour   = guide_legend(direction = "vertical")) +
-    theme_classic() +
     labs(x = "Age", y = "Mean titre(log2)", colour = NULL,
          linetype = NULL) +
-    theme(axis.line = element_line(colour = "grey65"),
-          axis.title = element_text(size = 10, colour = "grey55"),
-          legend.position = "none")
+    theme(legend.position = "none")
 }
 
 plot_3C <- function(df, clr_vctr, linetype_vct)
 {
   ggplot(df, aes(age, mean)) +
-    geom_line(aes(group    = as.factor(scenario_lbl),
-                  colour   = as.factor(scenario_lbl),
-                  linetype = as.factor(scenario_lbl)),
+    geom_line(aes(group    = as.factor(scenario),
+                  colour   = as.factor(scenario),
+                  linetype = as.factor(scenario)),
               linewidth = 1.2) +
     labs(x = "Age", y = "Mean cumulative infections") +
     scale_colour_manual(values = clr_vctr) +
@@ -51,25 +45,29 @@ plot_3C <- function(df, clr_vctr, linetype_vct)
           axis.title = element_text(colour = "grey55"))
 }
 
-plot_3D <- function(df)
+plot_3D <- function(df, n_ind, sce_name)
 {
+  frac_df <- df |>
+    mutate(bin_inf = ifelse(n_inf_cum < 10, as.character(n_inf_cum), "10+"),
+           bin_inf = factor(bin_inf, levels = c(0:9, "10+"))) |>
+    group_by(age, bin_inf) |>
+    summarise(frac = sum(count) / n_ind,
+              .groups = "drop")
+
   my_colours <- c("grey85", viridis(10))
 
-  ggplot(df, aes(x = age, y = frac, fill = factor(n_inf_group),
-                 colour = factor(n_inf_group))) +
+  ggplot(frac_df, aes(x = age, y = frac, fill = factor(bin_inf),
+                 colour = factor(bin_inf))) +
     geom_area(position = "stack") +
     scale_fill_manual(values = my_colours, name = "Cumulative infections") +
     scale_colour_manual(values = my_colours, name = "Cumulative infections") +
-    labs(x = "Age", y = "Density", subtitle = parse(text = sce_names[[1]])) +
+    labs(x = "Age", y = "Density", subtitle = parse(text = sce_names)) +
     scale_y_continuous(labels = label_percent()) +
-    facet_wrap(~lbl, labeller = label_parsed) +
-    guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
-    theme_classic() +
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
     theme(legend.position = "bottom",
-          axis.line = element_line(colour = "grey70"),
-          legend.key.size = unit(0.25, "cm"),
+          legend.key.size = unit(0.2, "cm"),
+          legend.text = element_text(size = 6),
           legend.margin = margin(t = -5, b = -2.5),
-          strip.background = element_blank(),
-          strip.text = element_blank(),
-          axis.title = element_text(colour = "grey55"))
+          legend.title = element_text(size = 7.5),
+          legend.spacing.x = unit(0.01, "cm"))
 }

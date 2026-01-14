@@ -87,7 +87,7 @@ plot_2F <- function(pred_df, data_df)
   ggplot(pred_df, aes(age, q50)) +
     geom_line(linewidth = 0.5, aes(colour = cohort)) +
     geom_ribbon(aes(ymin = q2.5, ymax = q97.5, fill = cohort), alpha = 0.5) +
-    facet_wrap(~country, ncol = 1) +
+    # facet_wrap(~country, ncol = 1) +
     geom_point(data = data_df, aes(y = mean, colour = cohort), shape = 1,
                size = 0.5) +
     scale_colour_manual(values = c("NMC" = NMC_all, "KFCS" = KFCS_clr,

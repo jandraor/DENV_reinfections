@@ -1,0 +1,228 @@
+---
+title: "Simulation of titres"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(furrr)
+library(gt)
+library(lubridate)
+library(flavipack)
+library(ggplot2)
+library(purrr)
+library(readr)
+library(scales)
+library(stringr)
+library(tidyr)
+
+source("./R_scripts/DGP.R")
+source("./R_scripts/plots.R")
+```
+
+```{r}
+n_ind    <- 1e7
+stop_age <- 80
+
+# palette 22 sept 2025
+clr_PHL     <- "#8BAE80"
+clr_THA     <- "#6C7CC0"
+clr_PHL_dgm <- "#C7CEAC"
+```
+
+
+# Fig 3A
+
+```{r}
+rho_hat    <- 0.008
+lambda_PHL <- 0.09
+lambda_THA <- 0.06
+
+scenarios_inf_dyn <- list(
+  list(scenario = 1, daily_lambda = lambda_PHL, daily_rho = rho_hat, 
+       decay_rate_pattern = "Variable"),
+  list(scenario = 2, daily_lambda = lambda_PHL, daily_rho = 0,
+       decay_rate_pattern = "Variable"),
+  list(scenario = 3, daily_lambda = lambda_THA, daily_rho = rho_hat,
+       decay_rate_pattern = "Variable"))
+
+sim_list <- imap(scenarios_inf_dyn, \(sce_obj, i) {
+  
+  lambda_val <- sce_obj$daily_lambda
+  rho_val    <- sce_obj$daily_rho
+  drp        <- sce_obj$decay_rate_pattern
+  
+  lambda_lbl <- percent(lambda_val * 365)
+  rho_lbl    <- percent(rho_val * 365, accuracy = 0.1)
+  
+  sce_lbl    <- str_glue("FOI: {lambda_lbl}, Rate of loss of immunity: {rho_lbl}, Decay rate: {drp}")
+  
+  tic()
+  
+  inf_df <- simulate_DENV_infections_since_birth(
+      lambda_serotype = lambda_val,
+      loss_rate       = rho_val,
+      n_individuals   = n_ind,
+      final_age       = stop_age)
+  
+  toc()
+  
+  pct_inf_age <- inf_df |> group_by(age) |> 
+    summarise(n_inf = n()) |> 
+    mutate(n_individuals = n_ind,
+           pct           = n_inf / n_individuals,
+           scenario_lbl  = sce_lbl,
+           decay_rate    = drp) |> 
+    filter(age >= 2)
+  
+  list(pct_inf_age = pct_inf_age,
+       inf_df      = inf_df)
+})
+
+inf_prob_age_df <- imap_dfr(sim_list, \(obj, sce_lbl) {
+   obj$pct_inf_age |>
+    mutate(lbl = sce_lbl)
+})
+```
+
+
+```{r plot3A}
+sce_names <- c(
+  "lambda*' = 9%, '*rho*' = 0.8%'",
+  "lambda*' = 9%, '*rho*' = 0.0%'",
+  "lambda*' = 6%, '*rho*' = 0.8%'")
+
+text_df <- data.frame(sce_id = 1:3,
+                      label  = sce_names,
+                      x      = 55,
+                      y      = c(0.2, 0.12, 0.16))
+
+fig3A <- plot_3A(inf_prob_age_df, text_df,
+                 c(clr_PHL, clr_PHL_dgm, clr_THA),
+                 c("solid","11", "solid"))
+fig3A
+```
+
+
+# Fig 3B
+
+```{r}
+avg_titres_df <- imap_dfr(sim_list, \(obj, i) {
+  
+  inf_df <- obj$inf_df
+  
+  ids <- seq_len(n_ind)
+  
+  inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
+  
+  inf_times_list <- split(inf_df$age,
+                          factor(inf_df$subject_id, levels = ids))
+  
+  MLE_obj <- readRDS("./saved_objects/inference/two_datasets/MLE.rds") |> 
+    as.list()
+
+  tic()
+  
+  avg_titre_vctr <- estimate_avg_titre_by_age(
+    log_first_peak = MLE_obj$log_A0,
+    decay_rate     = get_decay_rate(),
+    phi            = MLE_obj$phi,
+    beta           = 1,
+    inf_times_list = inf_times_list,
+    final_age      = 80) 
+  
+  toc()
+  
+  data.frame(age = 1:80, mean_titre = avg_titre_vctr) |> 
+    mutate(scenario = i)
+})
+```
+
+```{r}
+gc()
+fig3B <- plot_3B(avg_titres_df,
+                 c(clr_PHL, clr_PHL_dgm, clr_THA),
+                 c("solid","11", "solid"))
+
+fig3B
+```
+
+
+# Fig 3C
+
+```{r}
+age_span <- 1:80
+
+cum_inf_df <- map_df(1:3, \(sce_id){
+  
+  inf_df      <- sim_list[[sce_id]]$inf_df
+  
+  df_list      <- split(inf_df, inf_df$age)
+  n_inf_by_age <- map_dbl(df_list, \(df) nrow(df))
+  cum_inf_age  <- cumsum(n_inf_by_age)
+  avg_inf_age  <- cum_inf_age / n_ind
+  
+  data.frame(age  = age_span,
+             mean = avg_inf_age) |> 
+    mutate(scenario = sce_id)
+})
+```
+
+
+```{r}
+gc()
+fig3C <- plot_3C(cum_inf_df,
+                 c(clr_PHL, clr_PHL_dgm, clr_THA),
+                 c("solid","11", "solid"))
+fig3C
+```
+
+```{r}
+inf_df <- sim_list[[1]]$inf_df
+
+inf_by_age <- split(inf_df$subject_id, inf_df$age)
+
+cum_inf <- integer(n_ind)
+
+out        <- vector("list", length(age_span))
+names(out) <- age_span
+
+max_k <- max(tabulate(inf_df$subject_id))
+
+for(a in age_span)
+{
+  ids          <- inf_by_age[[as.character(a)]]
+  cum_inf[ids] <- cum_inf[ids] + 1L
+  tab          <- tabulate(cum_inf + 1L, nbins = max_k + 1L)
+  
+  out[[a]] <- data.frame(
+      age        = a,
+      n_inf_cum  = 0:max_k,
+      count      = tab)
+}
+
+count_df <- do.call(rbind, out)
+```
+
+```{r}
+gc()
+sce_name <- "lambda*' = 9%, '*rho*' = 0.8%'"
+fig3D <- plot_3D(count_df, n_ind, sce_name)
+
+fig3D
+```
+
+```{r, fig.width  = 10, fig.height = 6}
+fig3 <- ((fig3A|fig3B)/(fig3C|fig3D)) +
+   plot_annotation(tag_levels = 'A')
+
+ggsave(plot = fig3, "./plots/fig3.pdf", width = 10, height = 6,
+       create.dir = TRUE)
+
+ggsave(plot = fig3, "./plots/fig3.png", width = 10, height = 6,
+       create.dir = TRUE)
+
+fig3 
+```

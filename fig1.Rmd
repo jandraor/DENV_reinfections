@@ -148,36 +148,52 @@ fig_1E
 # Fig 1F
 
 ```{r}
+breaks <- c(0, 10, 20, 30, 40, 50, 60, Inf)
+labels <- c("0-9","10-19", "20-29",
+            "30-39", "40-49", "50-59", "60+")
+#-------------------------------------------------------------------------------
 CPC_symp_age_bins <- CPC_get_prob_symp_inf() |> 
   filter(age >= 2) |> 
-  group_symp_infection_in_bins(breaks, labels) |> 
-  mutate(rr      = pct_symp / pct_symp[age_bin == "(1,5]"],
-         comp_rr = 1 - rr,
-         cohort  = "CPC",
-         country = "PHL") |> 
-  select(age_bin, country, cohort, rr) 
+  group_symp_infection_in_bins(breaks, labels)
 
+ref <- CPC_symp_age_bins |> slice(1) 
+
+df_list <- split(CPC_symp_age_bins, CPC_symp_age_bins$age_bin)
+
+CPC_rr <- estimate_symptomatic_RR(df_list, ref) |> 
+  mutate(cohort  = "CPC",
+         country = "PHL") 
+#-------------------------------------------------------------------------------
 KFCS_symp_age_bins <- KFCS_get_prob_symp_inf() |> 
   filter(age_round >= 2) |> 
   rename(age = age_round) |> 
-  group_symp_infection_in_bins(breaks, labels) |> 
-  mutate(rr      = pct_symp / pct_symp[age_bin == "(1,5]"],
-         cohort  = "KFCS",
-         country = "THA") |> 
-  select(age_bin, country, cohort, rr) 
+  group_symp_infection_in_bins(breaks, labels)
 
+ref <- KFCS_symp_age_bins |> slice(1) 
+
+df_list <- split(KFCS_symp_age_bins, KFCS_symp_age_bins$age_bin)
+
+KFCS_rr <- estimate_symptomatic_RR(df_list, ref) |> 
+  mutate(cohort  = "KFCS",
+         country = "THA") 
+#-------------------------------------------------------------------------------
 NMC_symp_age_bins <- NMC_get_prob_symp_inf() |> 
   filter(age >= 2) |> 
-  group_symp_infection_in_bins(breaks, labels) |>
-  mutate(rr      = pct_symp / pct_symp[age_bin == "(1,5]"],
-         cohort  = "NMC",
-         country = "PHL") |> 
-  select(age_bin, country, cohort, rr) 
+  group_symp_infection_in_bins(breaks, labels)
 
-symp_age_bins <- bind_rows(CPC_symp_age_bins,
-                           KFCS_symp_age_bins)
+ref <- NMC_symp_age_bins |> slice(1)
 
-fig_1F <- plot_1F(symp_age_bins, NMC_symp_age_bins)
+df_list <- split(NMC_symp_age_bins, NMC_symp_age_bins$age_bin)
+
+NMC_rr <- estimate_symptomatic_RR(df_list, ref) |> 
+  mutate(cohort  = "NMC",
+         country = "PHL")  
+
+rr_df <- bind_rows(CPC_rr,
+                   KFCS_rr,
+                   NMC_rr)
+
+fig_1F <- plot_1F(rr_df)
 fig_1F
 ```
 
