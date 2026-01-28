@@ -30,13 +30,6 @@ source("./R_scripts/KFCS.R")
 source("./R_scripts/inference.R")
 source("./R_scripts/NMC.R")
 source("./R_scripts/plots.R")
-
-
-NMC_all  <- "#59979C"
-NMC_PCR  <- "#B2CABD"
-KFCS_clr <- "#F08C61"
-CPC_clr  <- "#6E291C"
-DENV_1_4       <- c("#9AC4C5", "#7CA3CD", "#7260A8", "#ECEDE0") # Palette 880
 ```
 
 # Fig 2A
@@ -44,8 +37,51 @@ DENV_1_4       <- c("#9AC4C5", "#7CA3CD", "#7260A8", "#ECEDE0") # Palette 880
 
 ```{r}
 plac_df <- NMC_get_placebo_data()
+
+mean_titres_beg_end <- plac_df |> filter(visit_no %in% c(6, 18),
+                                         log2_mean > 0) |> 
+  group_by(subjectNo) |> 
+  mutate(min_days = min(days_bleed),
+         max_days = max(days_bleed),
+         range    = max_days - min_days) |> 
+  filter(range > 0) |> 
+  group_by(visit_no) |> 
+  summarise(mean     = mean(log2_mean),
+            sd_titre = sd(log2_mean),
+            n    = n(),
+            se_titre   = sd_titre / sqrt(n)) |> 
+  mutate(q2.5  = mean + qnorm(0.025) * se_titre,
+         q97.5 = mean + qnorm(0.975) * se_titre)
+
 fig_2A <- plot_2A(plac_df)
 fig_2A
+```
+
+```{r}
+KFCS_titre_df <- KFCS_get_titre_data()
+
+KFCS_beg_end_mean_titre <- KFCS_titre_df |> filter(age >= 2,
+                                 log2_mean > 0) |> 
+  mutate(collection_year = year(collection_date)) |> 
+  filter(collection_year %in% c(2016, 2023)) |> 
+  group_by(subjectNo) |>
+  mutate(min_year = min(collection_year),
+         max_year = max(collection_year),
+         range = max_year - min_year) |> 
+  filter(range > 0) |> 
+  group_by(collection_year) |> 
+  summarise(mean     = mean(log2_mean),
+            sd_titre = sd(log2_mean),
+            n    = n(),
+            se_titre   = sd_titre / sqrt(n)) |> 
+  mutate(q2.5  = mean + qnorm(0.025) * se_titre,
+         q97.5 = mean + qnorm(0.975) * se_titre)
+
+
+
+ggplot(KFCS_titre_df, aes(collection_date, log2_mean)) +
+  geom_line(aes(group = subjectNo)) +
+  geom_smooth()
 ```
 
 
@@ -79,7 +115,7 @@ result_df <- imap_dfr(plac_infections_list, \(inf_obj, i) {
   
   if(n_illness_inv == 0)
   {
-    draws_time <- subject_titre$days_bleed
+    draws_time     <- subject_titre$days_bleed
     meas_after_inf <- draws_time[draws_time - inf_time > 0]
     
     next_meas <- min(meas_after_inf)
@@ -106,7 +142,6 @@ result_df <- imap_dfr(plac_infections_list, \(inf_obj, i) {
            serostatus = NA)
     return(rise_df)
   }
-  
   
   titre_below_30 <- subject_titre |> filter((days_bleed - inf_time) < 30) |>
     arrange(days_bleed)
@@ -177,7 +212,7 @@ result_df <- imap_dfr(plac_infections_list, \(inf_obj, i) {
   
   baseline_df <- titre_below_30 |> filter(days_bleed < peak_time,
                                           peak_time - days_bleed < tol) |> 
-  filter(log2_mean == min(log2_mean)) 
+    filter(log2_mean == min(log2_mean)) 
   
   rise_df <- data.frame(subject_id     = subject_id,
                         baseline       = baseline_df$log2_mean,
@@ -191,6 +226,31 @@ result_df <- imap_dfr(plac_infections_list, \(inf_obj, i) {
   
 })
 ```
+
+```{r}
+t.test(result_df$rise)$conf.int
+
+rise_baseline_below_3 <- result_df |> filter(serostatus == "Seropositive") |>
+  filter(baseline < 3) |> pull(rise)
+round(mean(rise_baseline_below_3), 1)
+
+round(t.test(rise_baseline_below_3)$conf.int, 1)
+
+round(t.test(rise_baseline_above_3)$conf.int, 1)
+
+rise_baseline_above_3 <- result_df |> filter(baseline > 3) |> pull(rise)
+round(mean(rise_baseline_above_3), 1)
+
+round(t.test(rise_baseline_above_3)$conf.int, 1)
+
+ggplot(result_df, aes(rise)) +
+  geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
+  scale_x_continuous(n.breaks = 6) +
+  labs(y = "Frequency", x = "Rise in titers (adjusted log2 scale)")
+
+ggsave("./plots/suppl/S1.png", width = 4, height = 2)
+```
+
 
 ```{r, message = FALSE}
 seropos_df <- result_df |> filter(serostatus == "Seropositive")
@@ -215,6 +275,38 @@ fig_2B
 
 ggsave("./plots/2B.png", width = 2.5, height = 2.5)
 ```
+
+```{r}
+KFCS_rise <- KFCS_get_rise_df()
+
+mean_rise <- mean(KFCS_rise$rise)
+
+cat("\nMean rise: ", mean_rise)
+
+cat("\n CI mean rise: ", t.test(KFCS_rise$rise)$conf.int)
+
+seropos_df <- KFCS_rise |> filter(serostatus == "Seropositive")
+
+fit <- lm(rise ~ baseline, data = seropos_df)
+
+rise_baseline_below_2 <- seropos_df |>
+  filter(baseline < 2) |> pull(rise)
+
+mean_rise_below_2 <- round(mean(rise_baseline_below_2), 1)
+
+cat("\n Mean rise below 2: ", mean_rise_below_2)
+
+mean_CI_below_2 <- round(t.test(rise_baseline_below_2)$conf.int, 1)
+
+cat("\n 95% CI: ", mean_CI_below_2)
+
+
+rise_baseline_above_2 <- seropos_df  |> filter(baseline > 2) |> pull(rise)
+cat("\n Mean rise above 2: ", round(mean(rise_baseline_above_2), 1))
+
+round(t.test(rise_baseline_above_2)$conf.int, 1)
+```
+
 
 # Fig 2C
 
@@ -299,6 +391,69 @@ post_inf_df <- map_df(symp_ids, \(id) {
 ```
 
 ```{r}
+fast_df <- post_inf_df |> filter(years_post_peak <= 1)
+
+fit <- lm(titre ~ years_post_peak, data = fast_df)
+
+library(sandwich)
+library(lmtest)
+
+ct <- coeftest(fit, vcov = vcovCL(fit, cluster = ~ subjectNo))
+
+CI <- cbind(
+  Estimate = ct[, "Estimate"],
+  Lower = ct[, "Estimate"] - 1.96 * ct[, "Std. Error"],
+  Upper = ct[, "Estimate"] + 1.96 * ct[, "Std. Error"]
+)
+
+CI
+
+slow_df <- post_inf_df |> filter(years_post_peak > 1)
+
+library(lme4)
+library(lmerTest)
+
+fit_slow <- lmer(titre ~ years_post_peak + (years_post_peak | subjectNo),
+     data = slow_df)
+
+summary(fit_slow)
+
+confint(fit_slow, method = "Wald")
+```
+```{r}
+KFCS_PCR_trajectories <- KFCS_get_PCR_trajectories()
+
+ggplot(KFCS_PCR_trajectories, aes(years_post_peak, log2_mean)) +
+  geom_line(aes(group = id)) +
+  geom_smooth(se = FALSE)
+
+fast_df <- KFCS_PCR_trajectories |> filter(years_post_peak <= 1)
+
+fit <- lm(log2_mean ~ years_post_peak, data = fast_df)
+
+ct <- coeftest(fit, vcov = vcovCL(fit, cluster = ~ subjectNo))
+
+CI <- cbind(
+  Estimate = ct[, "Estimate"],
+  Lower = ct[, "Estimate"] - 1.96 * ct[, "Std. Error"],
+  Upper = ct[, "Estimate"] + 1.96 * ct[, "Std. Error"]
+)
+
+CI
+
+slow_df <- KFCS_PCR_trajectories |> filter(years_post_peak > 1)
+
+fit_slow <- lmer(log2_mean ~ years_post_peak + (years_post_peak | subjectNo),
+     data = slow_df)
+
+summary(fit_slow)
+
+confint(fit_slow, method = "Wald")
+```
+
+
+
+```{r}
 fig_2C <- plot_2C(post_inf_df) 
 
 fig_2C
@@ -353,6 +508,11 @@ KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI("KFCS") |>
 ```
 
 ```{r f2C}
+fit1 <- lm(mean ~ 0 + bin_delta, data = KFCS_mean_estimates)
+hl1  <- 1 / fit1$coefficients # half-life
+fit2 <- lm(mean ~ 0 + bin_delta, data = NMC_mean_estimates)
+hl2  <- 1 / fit2$coefficients
+
 mean_estimates <- bind_rows(KFCS_mean_estimates, NMC_mean_estimates)
 
 fig_2D <- plot_2D(mean_estimates)
@@ -430,6 +590,8 @@ decay_df <- imap_dfr(df_list, \(df, i) {
 ```
 
 ```{r}
+mean_decay_less_10 <- decay_df |> filter(age <= 10) |> pull(slope) |> mean()
+
 ages <- decay_df$age |> unique() |> sort()
 
 min_age <- ages[2]
@@ -483,11 +645,30 @@ CPC_avg_titre <- CPC_titre |> group_by(age) |>
          cohort = "CPC",
          country = "PHL")
 
+CPC_avg_growth_rate <- CPC_avg_titre |> mutate(growth_rate = mean - lag(mean)) |> 
+  filter(age <= 20) |> pull(growth_rate) |> mean(na.rm = TRUE)
+
+b_df <- CPC_avg_titre |> filter(age == 22) |> 
+  mutate(ub = round(mean + qnorm(0.975) * SE, 1),
+         lb = round(mean + qnorm(0.025) * SE, 1)) |> 
+  select(lb, ub)
+
+plateau_df <- CPC_titre |> filter(age >= 22)
+
+fit <- lm(log2_mean ~ age, data = plateau_df)
+confint(fit)
+
 NMC_avg_titre <- plac_df |> group_by(age) |> 
   summarise(mean = mean(log2_mean)) |> 
-  mutate(mean = 0.72 * mean,
+  mutate(mean_NT = mean,
+         mean    = 0.72 * mean,
          cohort  = "NMC",
          country = "PHL")
+
+NMC_avg_growth_rate <- NMC_avg_titre |>
+  mutate(growth_rate = mean - lag(mean)) |> 
+  filter(age <= 20) |> pull(growth_rate) |> mean(na.rm = TRUE)
+
 
 KFCS_titre_df <- KFCS_get_titre_data() |> filter(age >= 2) 
 
@@ -499,6 +680,17 @@ KFCS_avg_titre <- KFCS_titre_df |> group_by(age) |>
   mutate(SE = sd / sqrt(n_individuals),
          cohort = "KFCS",
          country = "THA")
+
+KFCS_avg_growth_rate <- KFCS_avg_titre |>
+  mutate(growth_rate = mean - lag(mean)) |> 
+  filter(age <= 20) |> pull(growth_rate) |> mean(na.rm = TRUE)
+
+KFCS_avg_titre |> filter(n_individuals > 100) |> filter(mean == max(mean))
+
+plateau_df <- KFCS_titre_df |> filter(age >= 48)
+
+fit <- lm(log2_mean ~ age, data = plateau_df)
+confint(fit)
 ```
 
 ```{r}

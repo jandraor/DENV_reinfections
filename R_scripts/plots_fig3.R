@@ -61,8 +61,7 @@ plot_3D <- function(df, n_ind, sce_name)
     geom_area(position = "stack") +
     scale_fill_manual(values = my_colours, name = "Cumulative infections") +
     scale_colour_manual(values = my_colours, name = "Cumulative infections") +
-    labs(x = "Age", y = "Density", subtitle = parse(text = sce_names)) +
-    scale_y_continuous(labels = label_percent()) +
+    labs(x = "Age", y = "Proportion", subtitle = parse(text = sce_names)) +
     guides(fill = guide_legend(nrow = 1, byrow = TRUE)) +
     theme(legend.position = "bottom",
           legend.key.size = unit(0.2, "cm"),

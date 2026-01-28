@@ -51,11 +51,8 @@ NMC_get_infection_df <- function()
 
   df_list <- split(plac_df, plac_df$subjectNo)
 
-  PCR_infections <- read_csv("./data/NMC/NMC_PCR_infections_manual.csv",
-                             show_col_types = FALSE) |>
-    arrange(subject_no)
+  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
 
-  plac_inf <- PCR_infections |> filter(subject_no %in% plac_ids)
 
   infection_df <- imap_dfr(df_list, \(f_df, id) {
 
@@ -102,7 +99,8 @@ NMC_get_prob_symp_inf <- function()
   infection_df |>
     filter(!is.na(is_inf)) |> group_by(age) |>
     summarise(n_infections  = sum(is_inf),
-              n_symp        = sum(PCR_infection))
+              n_symp        = sum(PCR_infection),
+              n_individuals = n())
 }
 
 filter_short_term_dynamics <- function(df, plac_inf, cutoff_st = 365)
@@ -154,5 +152,14 @@ estimate_delta_times <- function(df)
     mutate(delta_time = days_bleed2 - days_bleed_1,
            delta_titre = titre_2 - titre_1)
 
+}
+
+NMC_get_symptomatic_infections <- function(plac_ids)
+{
+  PCR_infections <- read_csv("./data/NMC/NMC_PCR_infections_manual.csv",
+                             show_col_types = FALSE) |>
+    arrange(subject_no)
+
+  plac_inf <- PCR_infections |> filter(subject_no %in% plac_ids)
 }
 

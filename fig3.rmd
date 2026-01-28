@@ -7,6 +7,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(dplyr)
+library(dtplyr)
 library(furrr)
 library(gt)
 library(lubridate)
@@ -59,15 +60,11 @@ sim_list <- imap(scenarios_inf_dyn, \(sce_obj, i) {
   
   sce_lbl    <- str_glue("FOI: {lambda_lbl}, Rate of loss of immunity: {rho_lbl}, Decay rate: {drp}")
   
-  tic()
-  
   inf_df <- simulate_DENV_infections_since_birth(
       lambda_serotype = lambda_val,
       loss_rate       = rho_val,
       n_individuals   = n_ind,
       final_age       = stop_age)
-  
-  toc()
   
   pct_inf_age <- inf_df |> group_by(age) |> 
     summarise(n_inf = n()) |> 
@@ -85,6 +82,21 @@ inf_prob_age_df <- imap_dfr(sim_list, \(obj, sce_lbl) {
    obj$pct_inf_age |>
     mutate(lbl = sce_lbl)
 })
+```
+
+```{r}
+sapply(c(20, 40, 60), \(age_cutoff) {
+  n_ind_hmt_reinf <- sim_list[[1]]$inf_df |> lazy_dt() |> 
+  filter(age <= age_cutoff) |> 
+  group_by(subject_id, serotype) |> 
+  count() |> 
+  ungroup() |> 
+  filter(n > 1) |> 
+  pull(subject_id) |> unique() |> length()
+
+n_ind_hmt_reinf / n_ind
+})
+
 ```
 
 
@@ -123,8 +135,6 @@ avg_titres_df <- imap_dfr(sim_list, \(obj, i) {
   MLE_obj <- readRDS("./saved_objects/inference/two_datasets/MLE.rds") |> 
     as.list()
 
-  tic()
-  
   avg_titre_vctr <- estimate_avg_titre_by_age(
     log_first_peak = MLE_obj$log_A0,
     decay_rate     = get_decay_rate(),
@@ -132,8 +142,6 @@ avg_titres_df <- imap_dfr(sim_list, \(obj, i) {
     beta           = 1,
     inf_times_list = inf_times_list,
     final_age      = 80) 
-  
-  toc()
   
   data.frame(age = 1:80, mean_titre = avg_titre_vctr) |> 
     mutate(scenario = i)

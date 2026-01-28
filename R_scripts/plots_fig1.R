@@ -55,8 +55,8 @@ plot_1D <- function(sim_df, data_df)
     scale_colour_manual(values = c("CPC" = CPC_clr, "NMC" = NMC_all)) +
     scale_fill_manual(values = c("CPC" = CPC_clr, "NMC" = NMC_all)) +
     scale_x_discrete(labels = labels) +
-    scale_y_continuous(limits = c(0, NA), labels = label_percent()) +
-    labs(x      = "Age group", y = "Infections",
+    scale_y_continuous(limits = c(0, 0.3)) +
+    labs(x      = "Age group", y = "Incidence rate",
          colour = "Cohort", subtitle = "CPC/NMC") +
     theme(axis.line = element_line(colour = "grey75"),
           axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -80,8 +80,8 @@ plot_1E <- function(sim_df, data_df)
     scale_colour_manual(values = c("KFCS" = KFCS_clr)) +
     scale_fill_manual(values = KFCS_clr) +
     scale_x_discrete(labels = labels) +
-    scale_y_continuous(limits = c(0, NA), labels = label_percent()) +
-    labs(x      = "Age group", y = "Infections",
+    scale_y_continuous(limits = c(0, 0.3)) +
+    labs(x      = "Age group", y = "Incidence rate",
          colour = "Cohort", subtitle = "KFCS") +
     theme(axis.line = element_line(colour = "grey75"),
           axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -97,6 +97,8 @@ plot_1F <- function(df)
            RR_plot = ifelse(undef, 0.02, RR)) # 0.02 arbitrary for plotting
 
   ggplot(df, aes(age_bin, RR_plot)) +
+    geom_line(aes(colour = cohort, group = cohort), alpha = 0.2,
+              position = position_dodge(width = 0.6)) +
     geom_point(aes(color = cohort, shape = undef),
                position = position_dodge(width = 0.6)) +
     scale_y_log10() +
@@ -110,9 +112,8 @@ plot_1F <- function(df)
 
     scale_shape_manual(values = c(`FALSE` = 16, `TRUE`  = 1)) +
     labs(x = "Age group",
-         y = "Relative risk (vs 0–9)") +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5,
-                                     size = 6),
+         y = "Relative risk") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
           legend.position = "none")
 
 }

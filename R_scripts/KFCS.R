@@ -52,7 +52,11 @@ KFCS_get_infection_df <- function()
     mutate(age_start    = as.numeric(start_interval - dateBirth2) / 365.25,
            age_end      = as.numeric(end_interval - dateBirth2) / 365.25,
            age_round    = round(age_end),
-           is_titre_inf = ifelse(xgBoostPred < 0.8, FALSE, TRUE))
+           is_titre_inf = ifelse(xgBoostPred < 0.8, FALSE, TRUE),
+           ratio_log2   = ifelse(log2_mean_end_DEN == 0 & log2_mean_start_DEN == 0,
+                                     0, log2_mean_end_DEN / log2_mean_start_DEN),
+           is_titre_alt_inf = ifelse(ratio_log2 >= 1.6, TRUE, FALSE))
+
 
   KFCS_PCR <-  KFCS_get_symp_infections()
 
@@ -81,7 +85,8 @@ KFCS_get_infection_df <- function()
 
     df
   }) |>
-    mutate(is_inf = is_titre_inf | PCR)
+    mutate(is_inf = is_titre_inf | PCR,
+           is_alt_inf = is_titre_alt_inf | PCR)
 }
 
 KFCS_get_prob_inf_at_age <- function()
@@ -120,6 +125,167 @@ KFCS_get_symp_infections <- function()
              pcrDengueTypeDEN4 == 1 & DEN_sum == 1 ~ "DENV-4",
              TRUE ~ "Untyped/Mixed")) |>
     select(-contains("pcrDengueType"))
+}
+
+KFCS_get_rise_df <- function()
+{
+  PCR_df <- read_csv("./data/KFCS/Analysis_Illness_20240722.csv",
+                     show_col_types = FALSE) |>
+    filter(pcrResult == "Dengue")
+
+  df <- PCR_df |>
+    select(subjectNo, id, haiBA1_sampleDate, contains("haiBA1_D")) |>
+    filter(haiBA1_sampleDate != "NULL") |>
+    mutate(
+      across(
+        .cols = matches("haiBA1_D"),
+        .fns = as.numeric)) |>
+    mutate(
+      across(
+        .cols = matches("haiBA1_D"),
+        .fns = list(log2 = log2_transform),
+        .names = "{.fn}_{.col}"))
+
+  acute_df <- df |>
+    mutate(log2_mean =
+             rowMeans(select(df, starts_with("log2_haiBA1_D")),
+                      na.rm = TRUE)) |>
+    rename(sample_date = haiBA1_sampleDate) |>
+    select(subjectNo, id, sample_date, log2_mean) |>
+    mutate(sample_type = "A1")
+
+  df <- PCR_df |>
+    select(subjectNo, id, haiBC1_sampleDate, contains("haiBC1_D")) |>
+    filter(haiBC1_sampleDate != "NULL") |>
+    mutate(
+      across(
+        .cols = matches("haiBC1_D"),
+        .fns = as.numeric)) |>
+    mutate(
+      across(
+        .cols = matches("haiBC1_D"),
+        .fns = list(log2 = log2_transform),
+        .names = "{.fn}_{.col}"))
+
+  conv_1_df <- df |>
+    mutate(log2_mean =
+             rowMeans(select(df, starts_with("log2_haiBC1_D")),
+                      na.rm = TRUE)) |>
+    rename(sample_date = haiBC1_sampleDate) |>
+    select(subjectNo, id, sample_date, log2_mean) |>
+    mutate(sample_type = "C1")
+
+  df <- PCR_df |>
+    select(subjectNo, id, haiBC2_sampleDate, contains("haiBC2_D")) |>
+    filter(haiBC2_sampleDate != "NULL") |>
+    mutate(
+      across(
+        .cols = matches("haiBC2_D"),
+        .fns = as.numeric)) |>
+    mutate(
+      across(
+        .cols = matches("haiBC2_D"),
+        .fns = list(log2 = log2_transform),
+        .names = "{.fn}_{.col}"))
+
+  conv_2_df <- df |>
+    mutate(log2_mean =
+             rowMeans(select(df, starts_with("log2_haiBC2_D")),
+                      na.rm = TRUE)) |>
+    rename(sample_date = haiBC2_sampleDate) |>
+    select(subjectNo, id, sample_date, log2_mean) |>
+    mutate(sample_type = "C2")
+
+
+  sample_df <- bind_rows(acute_df, conv_1_df, conv_2_df) |>
+    mutate(sample_date = ymd(sample_date))
+
+  titre_df <- KFCS_get_titre_data()
+
+  df_list <- split(sample_df, sample_df$id)
+
+  rise_df <- map_df(df_list, \(df){
+
+    peak_df <- df |> filter(log2_mean == max(log2_mean)) |>
+      filter(sample_date == min(sample_date))
+
+    acute_df <- df |> filter(sample_type == "A1")
+
+    infection_time <- acute_df$sample_date
+
+    s_id <- unique(df$subjectNo)
+
+    s_df <- titre_df |> filter(subjectNo == s_id)
+
+    if(nrow(s_df) == 0) return(NULL)
+
+    baseline_df <- s_df |>
+      filter(collection_date < infection_time) |>
+      filter(collection_date == max(collection_date))
+
+    baseline_date <- baseline_df$collection_date
+
+    gap <- as.numeric(infection_time - baseline_date)
+
+    if(gap > 365) return(NULL)
+
+
+    data.frame(subject_id     = s_id ,
+               baseline       = baseline_df$log2_mean,
+               baseline_time  = baseline_date,
+               peak           = peak_df$log2_mean,
+               peak_time      = peak_df$sample_date,
+               infection_time = infection_time)  |>
+      mutate(rise   = peak - baseline,
+             delta_t = peak_time - baseline_time,
+             serostatus = ifelse(baseline == 0, "Seronegative", "Seropositive"))
+  })
+
+  rise_df
+}
+
+KFCS_get_PCR_trajectories <- function()
+{
+  rise_df <- KFCS_get_rise_df() |>
+    mutate(id = row_number())
+
+  rise_list <- split(rise_df, rise_df$id)
+
+  infection_df <- KFCS_get_infection_df() |>
+    select(subjectNo, start_interval, log2_mean_start_DEN, end_interval,
+           log2_mean_end_DEN, is_inf)
+
+  map_df(rise_list, \(df) {
+
+    s_id      <- df$subject_id
+    peak_time <- df$peak_time
+    id        <- df$id
+
+    s_df <- infection_df |> filter(subjectNo == s_id) |>
+      mutate(is_peak_here = peak_time > start_interval &
+               peak_time <= end_interval) |>
+      filter(end_interval > peak_time) |>
+      mutate(inf_counter = cumsum(is_inf)) |>
+      filter(inf_counter == 1)
+
+
+    if(nrow(s_df) == 0) return(NULL)
+
+    second_meas <- s_df |> slice(1) |>
+      pull(end_interval)
+
+    second_titre <- s_df |> slice(1) |>
+      pull(log2_mean_end_DEN)
+
+    rest_df <- s_df |> slice(-1)
+
+    data.frame(id = id,
+               subjectNo       = s_id,
+               collection_date = c(peak_time, second_meas, rest_df$end_interval),
+               log2_mean       = c(df$peak, second_titre, rest_df$log2_mean_end_DEN)) |>
+      mutate(years_post_peak = as.numeric(collection_date - min(collection_date)) / 365)
+
+  })
 
 }
 
@@ -129,7 +295,8 @@ KFCS_get_prob_symp_inf <- function()
 
   infection_df |> group_by(age_round) |>
     summarise(n_infections  = sum(is_inf),
-              n_symp        = sum(PCR)) |>
+              n_symp        = sum(PCR),
+              n_individuals = n()) |>
     filter(!is.na(age_round))
 }
 

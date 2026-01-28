@@ -117,5 +117,6 @@ CPC_get_prob_symp_inf <- function()
 
   infection_df |> group_by(age) |>
     summarise(n_infections  = sum(is_inf),
-              n_symp        = sum(PCR))
+              n_symp        = sum(PCR),
+              n_individuals = n())
 }
