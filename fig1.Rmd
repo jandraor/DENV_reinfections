@@ -286,6 +286,7 @@ prob_symp_age_df <- bind_rows(CPC_symp_age_bins, KFCS_symp_age_bins,
                               NMC_symp_age_bins)
 
 fig_1F <- plot_1F(prob_symp_age_df)
+
 fig_1F
 ```
 

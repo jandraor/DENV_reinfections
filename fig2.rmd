@@ -241,7 +241,6 @@ round(mean(rise_baseline_above_3), 1)
 
 round(t.test(rise_baseline_above_3)$conf.int, 1)
 
-round(t.test(rise_baseline_above_3)$conf.int, 1)
 
 ggplot(result_df, aes(rise)) +
   geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
@@ -420,7 +419,10 @@ summary(fit_slow)
 
 confint(fit_slow, method = "Wald")
 ```
+<<<<<<< HEAD
 
+=======
+>>>>>>> 4d40066 (Update code for rebase)
 ```{r}
 KFCS_PCR_trajectories <- KFCS_get_PCR_trajectories()
 

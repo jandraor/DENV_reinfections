@@ -62,6 +62,7 @@ add_binomial_symp_CI <- function(df)
   df
 }
 
+
 add_bootstrap_CI <- function(df)
 {
   df |>
