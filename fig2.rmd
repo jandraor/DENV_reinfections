@@ -419,10 +419,7 @@ summary(fit_slow)
 
 confint(fit_slow, method = "Wald")
 ```
-<<<<<<< HEAD
 
-=======
->>>>>>> 4d40066 (Update code for rebase)
 ```{r}
 KFCS_PCR_trajectories <- KFCS_get_PCR_trajectories()
 
