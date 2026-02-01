@@ -1,26 +1,31 @@
 ---
-title: "supplementary"
+title: "Supplementary"
 author: "Jair Andrade"
 date: "2026-01-30"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 
+library(boot)
 library(dplyr)
 library(flavipack)
 library(lubridate)
 library(purrr)
 library(readr)
+library(stringr)
+library(tidyr)
 
+source("./R_scripts/cohort_utils.R")
+source("./R_scripts/follow_up.R")
 source("./R_scripts/NMC.R")
 source("./R_scripts/plots.R")
 ```
 
 # S1
 
-```{r}
+```{r S1_chunk}
 plot_S1()
 
 ggsave("./plots/suppl/S1.png")
@@ -28,9 +33,17 @@ ggsave("./plots/suppl/S1.png")
 
 # S3
 
-```{r}
+```{r S3_chunk}
 plot_S3()
 
 ggsave("./plots/suppl/S3.png")
+```
+
+# S4
+
+```{r S4_chunk}
+plot_S4()
+
+ggsave("./plots/suppl/S4.png")
 ```
 

@@ -62,6 +62,11 @@ add_binomial_symp_CI <- function(df)
   df
 }
 
+boot_mean <- function(data_vct, indices) {
+  resampled_data_vct <- data_vct[indices] # resample data by indices
+  return(mean(resampled_data_vct))        # compute mean of resample
+}
+
 
 add_bootstrap_CI <- function(df)
 {

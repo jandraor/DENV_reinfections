@@ -26,7 +26,7 @@ source("./R_scripts/plots.R")
 # Fig 1A
 
 ```{r}
-NMC_infection_df <- NMC_get_infection_df() |> filter(is_inf == 1)
+NMC_infection_df <- NMC_get_infection_df(1.18) |> filter(is_inf == 1)
 
 NMC_symp_infection <- NMC_infection_df |> filter(PCR_infection == 1)
 

@@ -43,7 +43,7 @@ NMC_get_placebo_data <- function()
     mutate(age = round(age_cyd_inclusion + days_bleed / 365, 0))
 }
 
-NMC_get_infection_df <- function()
+NMC_get_infection_df <- function(cut_off)
 {
   plac_df <- NMC_get_placebo_data()
 
@@ -59,7 +59,7 @@ NMC_get_infection_df <- function()
       filter(subject_no == id)
 
     detect_infections(f_df |> rename(titre = log2_mean),
-                      PCR_df, cutoff = 1.18) |>
+                      PCR_df, cutoff = cut_off) |>
       remove_multiple_measurements_in_a_year()
   }) |> select(subjectNo, collected_year, age, days_bleed, titre, log_mean,
                PCR_infection, titre_infection, infection, serotype,
@@ -83,7 +83,7 @@ NMC_get_infection_df <- function()
 
 NMC_get_prob_inf_at_age <- function()
 {
-  infection_df <- NMC_get_infection_df()
+  infection_df <- NMC_get_infection_df(1.18)
 
   infection_df |>
     filter(!is.na(is_inf)) |> group_by(age) |>
@@ -94,7 +94,7 @@ NMC_get_prob_inf_at_age <- function()
 
 NMC_get_prob_symp_inf <- function()
 {
-  infection_df <- NMC_get_infection_df()
+  infection_df <- NMC_get_infection_df(1.18)
 
   infection_df |>
     filter(!is.na(is_inf)) |> group_by(age) |>
@@ -250,4 +250,37 @@ NMC_get_annual_pairs <- function()
     mutate(result = case_when(is_inf & PCR ~ "PCR Conf",
                               is_inf & !PCR ~ "Subclinical",
                               !is_inf ~ "No infection"))
+}
+
+NMC_get_binned_decay <- function(cut_off_val)
+{
+  infection_detection_df <- NMC_get_infection_df(cut_off_val)
+
+  infection_df <- infection_detection_df |>
+    mutate(is_inf = ifelse(is.na(is_inf), 0, is_inf)) |>
+    group_by(subjectNo) |>
+    mutate(inf_idx = cumsum(is_inf),
+           inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
+    ungroup()
+
+  df_list <- split(infection_df, infection_df$inf_id)
+
+  plac_ids <- unique(infection_detection_df$subjectNo)
+
+  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
+
+  delta_df <- map_df(df_list, \(df) {
+
+    df <- filter_short_term_dynamics(df, plac_inf, 365)
+
+    if(nrow(df) <= 1) return(NULL)
+
+    estimate_delta_times(df)
+  }) |> mutate(delta_year = delta_time / 365,
+               bin_delta  = round(delta_year, 0))
+
+  NMC_mean_estimates <- delta_df |> add_bootstrap_CI() |>
+    mutate(cohort = "NMC")
+
+  NMC_mean_estimates
 }
