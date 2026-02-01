@@ -285,25 +285,7 @@ p_value
 prob_symp_age_df <- bind_rows(CPC_symp_age_bins, KFCS_symp_age_bins,
                               NMC_symp_age_bins)
 
-fig_1F <- ggplot(prob_symp_age_df, aes(age_bin, rr)) +
-  geom_point(aes(colour = cohort),
-             position = position_dodge(width = 0.6), size = 0.5) +
-  # geom_errorbar(aes(ymin = lower, ymax = upper,  colour = cohort),
-  #               width = 0.1,
-  #               position = position_dodge(width = 0.6)) +
-  #scale_y_continuous(limits = c(NA, 0.1)) +
-  geom_line(aes(colour = cohort, group = cohort), alpha = 0.2,
-              position = position_dodge(width = 0.6)) +
-  scale_colour_manual(values = c("KFCS" = KFCS_clr, "CPC" = CPC_clr,
-                                   "NMC" = NMC_all)) +
-  labs(x = "Age group",
-         y = "Relative risk (avg cohort)") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-        legend.position = "none")
-
-#fig_1F
-
-fig_1F <- plot_1F(rr_df)
+fig_1F <- plot_1F(prob_symp_age_df)
 fig_1F
 ```
 
@@ -317,5 +299,4 @@ ggsave(plot = fig1, "./plots/fig1.png", width = 10, height = 6,
        create.dir = TRUE)
 fig1
 ```
-
 

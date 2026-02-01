@@ -7,9 +7,10 @@ detect_infections <- function(df, PCRdata, cutoff) {
   df <- df |>
     arrange(days_bleed) |>
     mutate(delta_t = as.numeric(days_bleed - lag(days_bleed))) |>
-    mutate(titre_infection = ifelse(titre > lag(titre, default = Inf) + cutoff,
-                                    1, 0)) |>
-    # This handles measurements taken on the rise
+    mutate(prev_titre      = lag(titre, default = Inf),
+           titre_diff      = titre - prev_titre,
+           titre_infection = ifelse(titre_diff > cutoff, 1, 0)) |>
+    # This handles measurements taken on the rise (Illness investigations)
     mutate(next_delta_t    = lead(delta_t, default = Inf),
            next_titre      = lead(titre),
            titre_infection = ifelse(
@@ -23,6 +24,7 @@ detect_infections <- function(df, PCRdata, cutoff) {
                                       consecutive_infection == 1 &
                                       delta_t < 180, 0, titre_infection)) |>
     select(-consecutive_infection)
+
 
   #-----------------------------------------------------------------------------
 

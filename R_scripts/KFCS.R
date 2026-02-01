@@ -114,7 +114,11 @@ KFCS_get_symp_infections <- function()
 {
   KFCS_PCR <- read_csv("./data/KFCS/Analysis_Illness_20240722.csv",
                        show_col_types = FALSE) |>
-    filter(pcrResult == "Dengue") |>
+    filter(pcrDengueTypeDEN1 == 1 |
+             pcrDengueTypeDEN2 == 1 |
+             pcrDengueTypeDEN3 == 1 |
+             pcrDengueTypeDEN4 == 1 |
+             pcrResult == "Dengue") |>
     select(subjectNo, dateEvaluationA1, pcrResult, contains("pcrDengueType")) |>
     mutate(DEN_sum = rowSums(across(starts_with("pcrDengueType")))) |>
     mutate(dateEvaluationA1 = ymd(dateEvaluationA1),

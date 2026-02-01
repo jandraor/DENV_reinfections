@@ -56,7 +56,7 @@ plot_1D <- function(sim_df, data_df)
     scale_fill_manual(values = c("CPC" = CPC_clr, "NMC" = NMC_all)) +
     scale_x_discrete(labels = labels) +
     scale_y_continuous(limits = c(0, 0.3)) +
-    labs(x      = "Age group", y = "Incidence rate",
+    labs(x      = "Age group", y = "Probability of infection",
          colour = "Cohort", subtitle = "CPC/NMC") +
     theme(axis.line = element_line(colour = "grey75"),
           axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -81,7 +81,7 @@ plot_1E <- function(sim_df, data_df)
     scale_fill_manual(values = KFCS_clr) +
     scale_x_discrete(labels = labels) +
     scale_y_continuous(limits = c(0, 0.3)) +
-    labs(x      = "Age group", y = "Incidence rate",
+    labs(x      = "Age group", y = "Probability of infection",
          colour = "Cohort", subtitle = "KFCS") +
     theme(axis.line = element_line(colour = "grey75"),
           axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -92,28 +92,17 @@ plot_1E <- function(sim_df, data_df)
 
 plot_1F <- function(df)
 {
-  df <- df |>
-    mutate(undef = ifelse(RR == 0, TRUE, FALSE),
-           RR_plot = ifelse(undef, 0.02, RR)) # 0.02 arbitrary for plotting
-
-  ggplot(df, aes(age_bin, RR_plot)) +
-    geom_line(aes(colour = cohort, group = cohort), alpha = 0.2,
-              position = position_dodge(width = 0.6)) +
-    geom_point(aes(color = cohort, shape = undef),
-               position = position_dodge(width = 0.6)) +
-    scale_y_log10() +
-    geom_errorbar(aes(ymin = q2.5, ymax = q97.5, group = cohort,
-                      colour = cohort),
-                  position = position_dodge(width = 0.6),
-                  width = 0) +
-    scale_x_discrete(labels = labels) +
-    scale_colour_manual(values = c("KFCS" = KFCS_clr, "CPC" = CPC_clr,
-                                   "NMC" = NMC_all)) +
-
-    scale_shape_manual(values = c(`FALSE` = 16, `TRUE`  = 1)) +
-    labs(x = "Age group",
-         y = "Relative risk") +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-          legend.position = "none")
-
+  ggplot(prob_symp_age_df, aes(age_bin, pct_symp_given_age,
+                               colour = cohort, group = cohort)) +
+    geom_linerange(aes(ymin = 0, ymax = upper),
+                   position = position_dodge(width = 0.6),
+                   linewidth = 0.4, alpha = 0.25) +
+    geom_point(position = position_dodge(width = 0.6), size = 0.7) +
+    scale_y_continuous(trans = "log1p" ) +
+    scale_colour_manual(values = c(
+      "KFCS" = KFCS_clr,"CPC"  = CPC_clr,"NMC"  = NMC_all)) +
+    labs(x = "Age group", y = "Prob symptomatic infection") +
+    theme(
+      axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+      legend.position = "none")
 }

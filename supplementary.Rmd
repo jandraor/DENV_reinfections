@@ -1,0 +1,36 @@
+---
+title: "supplementary"
+author: "Jair Andrade"
+date: "2026-01-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(flavipack)
+library(lubridate)
+library(purrr)
+library(readr)
+
+source("./R_scripts/NMC.R")
+source("./R_scripts/plots.R")
+```
+
+# S1
+
+```{r}
+plot_S1()
+
+ggsave("./plots/suppl/S1.png")
+```
+
+# S3
+
+```{r}
+plot_S3()
+
+ggsave("./plots/suppl/S3.png")
+```
+

@@ -62,21 +62,19 @@ add_binomial_symp_CI <- function(df)
   df
 }
 
-add_bootstrap_CI <- function(df, cohort_name)
+add_bootstrap_CI <- function(df)
 {
   df |>
     group_by(bin_delta) |>
     summarise(
       boot_obj = list(boot(delta_titre, boot_mean, R = 1000)),
-      .groups = "drop"
-    ) |>
+      n        = n(), .groups = "drop") |>
     rowwise() |>
     mutate(
       ci    = list(boot.ci(boot_obj, type = "perc")$percent[4:5]),
       mean  = boot_obj$t0,
       q2.5  = ci[[1]],
-      q97.5 = ci[[2]]) |>
-    mutate(cohort = cohort_name)
+      q97.5 = ci[[2]])
 }
 
 estimate_symptomatic_RR <- function(df_list, a_ref, n_ref)

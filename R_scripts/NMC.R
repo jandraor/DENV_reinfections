@@ -53,7 +53,6 @@ NMC_get_infection_df <- function()
 
   plac_inf <- NMC_get_symptomatic_infections(plac_ids)
 
-
   infection_df <- imap_dfr(df_list, \(f_df, id) {
 
     PCR_df <- plac_inf |>
@@ -63,7 +62,8 @@ NMC_get_infection_df <- function()
                       PCR_df, cutoff = 1.18) |>
       remove_multiple_measurements_in_a_year()
   }) |> select(subjectNo, collected_year, age, days_bleed, titre, log_mean,
-               PCR_infection, titre_infection, infection, serotype) |>
+               PCR_infection, titre_infection, infection, serotype,
+               contains("log2_D")) |>
     mutate(key = paste(subjectNo, collected_year, sep = "_"))
 
   # Individuals for whom it is not possible to determine whether there was
@@ -154,6 +154,33 @@ estimate_delta_times <- function(df)
 
 }
 
+pairwise_delta_by_serotype <- function(df)
+{
+  n_meas <- nrow(df)
+
+  if(n_meas == 1) return(NULL)
+
+  combos <- t(combn(seq_len(n_meas), 2))
+
+  data.frame(
+    inf_id = unique(df$inf_id),
+    days_bleed_1 = df$days_bleed[combos[, 1]],
+    titre_D1_1   = df$log2_D1_NT[combos[, 1]],
+    titre_D2_1   = df$log2_D2_NT[combos[, 1]],
+    titre_D3_1   = df$log2_D3_NT[combos[, 1]],
+    titre_D4_1   = df$log2_D4_NT[combos[, 1]],
+    days_bleed_2 = df$days_bleed[combos[, 2]],
+    titre_D1_2   = df$log2_D1_NT[combos[, 2]],
+    titre_D2_2   = df$log2_D2_NT[combos[, 2]],
+    titre_D3_2   = df$log2_D3_NT[combos[, 2]],
+    titre_D4_2   = df$log2_D4_NT[combos[, 2]]) |>
+    mutate(delta_time     = days_bleed_2 - days_bleed_1,
+           delta_titre_D1 = titre_D1_2 - titre_D1_1,
+           delta_titre_D2 = titre_D2_2 - titre_D2_1,
+           delta_titre_D3 = titre_D3_2 - titre_D3_1,
+           delta_titre_D4 = titre_D4_2 - titre_D4_1)
+}
+
 NMC_get_symptomatic_infections <- function(plac_ids)
 {
   PCR_infections <- read_csv("./data/NMC/NMC_PCR_infections_manual.csv",
@@ -163,3 +190,64 @@ NMC_get_symptomatic_infections <- function(plac_ids)
   plac_inf <- PCR_infections |> filter(subject_no %in% plac_ids)
 }
 
+NMC_get_annual_pairs <- function()
+{
+  cut_off <- 1.18
+
+  plac_df <- NMC_get_placebo_data()
+
+  plac_ids <- unique(plac_df$subjectNo)
+
+  df_list <- split(plac_df, plac_df$subjectNo)
+
+  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
+
+  infection_detection_df <- plac_df |> filter(visit_no >= 6 ) |>
+    arrange(subjectNo, days_bleed) |>
+    group_by(subjectNo) |>
+    mutate(prev_titre_log2          = lag(log2_mean),
+           titre_diff               = log2_mean - prev_titre_log2,
+           is_titre_inf             = ifelse(titre_diff > cut_off, 1, 0),
+           previous_collection_date = lag(collected_date)) |>
+    ungroup()
+
+  df_list <- split(infection_detection_df, infection_detection_df$subjectNo)
+
+  PCR_df <- NMC_get_symptomatic_infections(plac_ids)
+
+  infection_detection_df <- imap_dfr(df_list, \(df, subject_id) {
+
+    subject_PCR <- PCR_df  |> filter(subject_no == subject_id)
+
+    df$PCR <- FALSE
+
+    df$serotype <- "Subclinical"
+
+    if(nrow(subject_PCR) > 0)
+    {
+      vacc_date <- df$date_vaccine1[1]
+
+      first_meas <- min(df$collected_date)
+
+      subject_PCR <- subject_PCR |>
+        mutate(inf_date = vacc_date + dengue_days_pd1) |>
+        filter(inf_date >= first_meas)
+
+      PCR_dates <- subject_PCR$inf_date
+
+      df$PCR <- sapply(
+        seq_len(nrow(df)),
+        function(i) any(PCR_dates >= df$previous_collection_date[i] &
+                          PCR_dates <= df$collected_date[i]))
+
+      df[df$PCR, "serotype"] <- subject_PCR$serotype
+    }
+
+    df
+  }) |>
+    mutate(is_inf = is_titre_inf | PCR) |>
+    filter(!is.na(is_titre_inf)) |>
+    mutate(result = case_when(is_inf & PCR ~ "PCR Conf",
+                              is_inf & !PCR ~ "Subclinical",
+                              !is_inf ~ "No infection"))
+}

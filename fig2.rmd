@@ -236,10 +236,10 @@ round(mean(rise_baseline_below_3), 1)
 
 round(t.test(rise_baseline_below_3)$conf.int, 1)
 
-round(t.test(rise_baseline_above_3)$conf.int, 1)
-
 rise_baseline_above_3 <- result_df |> filter(baseline > 3) |> pull(rise)
 round(mean(rise_baseline_above_3), 1)
+
+round(t.test(rise_baseline_above_3)$conf.int, 1)
 
 round(t.test(rise_baseline_above_3)$conf.int, 1)
 
@@ -420,6 +420,7 @@ summary(fit_slow)
 
 confint(fit_slow, method = "Wald")
 ```
+
 ```{r}
 KFCS_PCR_trajectories <- KFCS_get_PCR_trajectories()
 
@@ -485,7 +486,8 @@ delta_df <- map_df(df_list, \(df)
 }) |> mutate(delta_year = delta_time / 365,
              bin_delta  = round(delta_year, 0)) 
 
-NMC_mean_estimates <- delta_df |> add_bootstrap_CI("NMC")
+NMC_mean_estimates <- delta_df |> add_bootstrap_CI() |> 
+    mutate(cohort = "NMC")
 ```
 
 ```{r}
@@ -503,7 +505,8 @@ df_list <- split(KFCS_infection_df, KFCS_infection_df$inf_id)
 KFCS_delta_df <- map_df(df_list, KFCS_estimate_deltas) |>
   mutate(bin_delta  = round(delta_time, 0)) 
 
-KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI("KFCS") |> 
+KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI() |> 
+  mutate(cohort = "KFCS") |> 
   filter(bin_delta > 0)
 ```
 
