@@ -38,6 +38,76 @@ plot_S1 <- function()
           legend.position.inside = c(0.8,0.8))
 }
 
+
+plot_S2 <- function()
+{
+  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
+
+  infection_df <- infection_detection_df |>
+    filter(is_inf == 1)
+
+  ids <- infection_df |> group_by(subjectNo) |>
+    summarise(n_inf = n()) |>
+    filter(n_inf < 4) |> pull(subjectNo)
+
+  blood_after_df <- infection_detection_df |> filter(subjectNo %in% ids) |>
+    arrange(subjectNo, days_bleed) |>
+    group_by(subjectNo) |>
+    mutate(prev_outcome = lag(is_inf)) |>
+    filter(prev_outcome == 1 & is_inf == 0) |>
+    mutate(seq_inf = row_number()) |>
+    select(subjectNo, seq_inf, contains("log2_D")) |>
+    ungroup()
+
+  blood_after_df$max_sero <- max.col(blood_after_df[, c(3:6)])
+
+  df_list <- split(blood_after_df, blood_after_df$subjectNo)
+
+  blood_after_df <- map_df(df_list, \(df) {
+
+    df$n_distinct <- NA
+
+    for(i in seq_len(nrow(df)))
+    {
+      df[i, "n_distinct"] <- df$max_sero[1:i] |> unique() |> length()
+    }
+
+    df
+  })
+
+  boot_ci <- function(x, B = 1000) {
+    boots <- replicate(B, mean(sample(x, replace = TRUE)))
+    quantile(boots, c(0.025, 0.975))
+  }
+
+  summary_df <- blood_after_df |>
+    group_by(seq_inf) |>
+    summarise(
+      mean = mean(n_distinct),
+      lower = boot_ci(n_distinct)[1],
+      upper = boot_ci(n_distinct)[2],
+      .groups = "drop")
+
+  ggplot(summary_df, aes(seq_inf)) +
+    geom_line(aes(y = mean), colour = NMC_all) +
+    geom_pointrange(aes(y = mean, ymin = lower, ymax = upper),
+                    colour = NMC_all) +
+    scale_y_continuous(limits = c(0.91, 3),
+                       breaks = 1:3) +
+    scale_x_continuous(breaks = 1:3) +
+    geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
+    annotate("text", label = "Original antigenic sin",
+             x = 2, y = 0.925) +
+    annotate("text", x = 2.3, y = 1.55, label = "Observed", angle = 25,
+             colour = NMC_all, hjust = 0) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dotted") +
+    annotate("text", x = 2, y = 2.125,
+             label = "Independece across serotypes", angle = 45) +
+    coord_equal(xlim = c(1, NA)) +
+    labs(x = "Number of infection",
+         y = "# of serotypes with the highest titer")
+}
+
 plot_S3 <- function()
 {
   infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
@@ -157,4 +227,98 @@ plot_S4 <- function()
       legend.key.width = unit(1.5, "cm")) +
      guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
 
+}
+
+plot_S5 <- function()
+{
+
+  raw <- read_excel("./data/NMC/NMC Laboratory testing result to Henrik 23JUNE23.xlsx")
+
+  Bleeds <- colnames(raw) |>
+    grep(pattern = '^BL', value = T) |>
+    str_extract('^BL[0-9A-Z\\-]+') |>
+    unique()
+
+
+  processTiters = function(x) {
+    mult = str_extract(x, '>|<')
+    ifelse( is.na(mult)
+            , 1
+            , c('<' = 1/2, '>' = 2)[mult]
+    ) *
+      as.numeric(gsub('^[^0-9]', '', x))
+  }
+
+  dat <-
+    Bleeds |>
+    lapply(function(bleed_name){
+      out <-
+        raw |>
+        select(starts_with(bleed_name)) |>
+        rename_all(function(x) gsub(paste0('^',bleed_name,' '), '', x)) |>
+        pivot_longer(cols = c(-No,-CollectionDate),names_to = "assay", values_to = "titer") |>
+        mutate(
+          CollectionDate = as.Date(CollectionDate)
+          , virus = str_extract(assay, '^[A-Z1-4]+')
+          , assay = str_extract(assay, '[A-Z]+$')
+          , titer = processTiters(titer)
+        )
+      out = split(out, out$assay)
+      inner_join(out$HAI, out$PRNT,
+                 by = c('No', 'virus', 'CollectionDate'),
+                 suffix = c('.hai', '.prnt'))
+    })
+
+
+  # GMT across DENV titres
+  dat.gmt <-
+    dat |>
+    lapply(function(x) {
+      x |>
+        filter(grepl('^D[1-4]', virus)) |>
+        group_by(No) |>
+        summarise(
+          logGMT.hai  = mean(1 + log2(titer.hai / 10)),
+          logGMT.prnt = mean(1 + log2(titer.prnt / 10)))
+    }) |> do.call(what = rbind)
+
+  # fit linear model to translate PRNT to HAI
+  fit <- glm(logGMT.hai ~ logGMT.prnt, data = dat.gmt)
+  summary(fit)
+
+  cor.test(dat.gmt$logGMT.hai, dat.gmt$logGMT.prnt, method = 'pearson')
+
+  dat.gmt |>
+    ggplot(aes(x = logGMT.prnt, y = logGMT.hai)) +
+    geom_point(size = 1, shape = 1, alpha = 0.2, colour = NMC_all) +
+    geom_smooth(method = 'lm', colour = NMC_all, fill = NMC_all) +
+    coord_fixed(ratio = 1) +
+    # actual means
+    geom_pointrange(data =
+                      dat.gmt |>
+                      mutate(
+                        prntBucket = cut(logGMT.prnt,
+                                         breaks = c(-Inf,0:10,Inf))) |>
+                      group_by(prntBucket) |>
+                      summarise(
+                        N        = n(),
+                        avg.prnt = mean(logGMT.prnt),
+                        avg.hai  = mean(logGMT.hai),
+                        sd.prnt  = sd(logGMT.prnt),
+                        sd.hai   = sd(logGMT.hai)),
+                    aes(x = avg.prnt, y = avg.hai,
+                        ymin = avg.hai - 1.96 * sd.hai / sqrt(N),
+                        ymax = avg.hai + 1.96 * sd.hai / sqrt(N)),
+                    alpha = 0.5, colour = NMC_all) +
+    labs(x = 'PRNT (log2)', y = 'HAI (log2)')
+}
+
+plot_S6 <- function()
+{
+  rise_df <- NMC_get_PCR_rise()
+
+  ggplot(rise_df, aes(rise)) +
+    geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
+    scale_x_continuous(n.breaks = 6) +
+    labs(y = "Frequency", x = "Rise in titers (log2 scale)")
 }

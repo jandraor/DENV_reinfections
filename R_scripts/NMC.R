@@ -284,3 +284,142 @@ NMC_get_binned_decay <- function(cut_off_val)
 
   NMC_mean_estimates
 }
+
+NMC_get_PCR_rise <- function()
+{
+  plac_df <- NMC_get_placebo_data()
+
+  plac_ids <- unique(plac_df$subjectNo)
+
+  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
+
+  tol <- 365 # tolerance in days
+
+  plac_infections_list <- transpose(plac_inf)
+
+  result_df <- imap_dfr(plac_infections_list, \(inf_obj, i) {
+
+    subject_id <- inf_obj$subject_no
+    inf_time   <- inf_obj$dengue_days_pd1
+
+    subject_titre <- plac_df |>
+      filter(subjectNo == subject_id) |>
+      arrange(days_bleed) |>
+      select(subjectNo, timepoint, days_bleed, visit_no, log2_mean)
+
+    # Number of illness investigation blood draws
+    n_illness_inv <- str_detect(subject_titre$timepoint, "BLA|BLC") |> sum()
+
+    if(n_illness_inv == 0)
+    {
+      draws_time     <- subject_titre$days_bleed
+      meas_after_inf <- draws_time[draws_time - inf_time > 0]
+
+      next_meas <- min(meas_after_inf)
+
+      if(next_meas - inf_time > tol)
+      {
+        cat("\n-------Rejection I---------")
+        cat("\n Subject id: ", subject_id)
+        cat("\n Infection time: ", inf_time)
+        cat("\n Next meas after infection: ", next_meas)
+        cat("\n Time to next meas: ", next_meas - inf_time)
+        return(NULL)
+      }
+
+
+      rise_df <- data.frame(subject_id     = subject_id,
+                            baseline       = NA,
+                            baseline_time  = NA,
+                            peak           = NA,
+                            peak_time      = inf_time,
+                            infection_time = inf_time) |>
+        mutate(rise     = NA,
+               delta_t = NA,
+               serostatus = NA)
+      return(rise_df)
+    }
+
+    titre_below_30 <- subject_titre |> filter((days_bleed - inf_time) < 30) |>
+      arrange(days_bleed)
+
+    if(nrow(titre_below_30) == 0)
+    {
+      draws_time     <- subject_titre$days_bleed
+      meas_after_inf <- draws_time[draws_time - inf_time > 0]
+
+      next_meas <- min(meas_after_inf)
+
+      if(next_meas - inf_time > tol)
+      {
+        cat("\n-------Rejection II---------")
+        cat("\n Subject id: ", subject_id)
+        cat("\n Infection time: ", inf_time)
+        cat("\n Next meas after infection: ", next_meas)
+        cat("\n Time to next meas: ", next_meas - inf_time)
+        return(NULL)
+      }
+
+      rise_df <- data.frame(subject_id     = subject_id,
+                            baseline       = NA,
+                            baseline_time  = NA,
+                            peak           = NA,
+                            peak_time      = inf_time,
+                            infection_time = inf_time) |>
+        mutate(rise       = NA,
+               delta_t    = NA,
+               serostatus = NA)
+
+      return(rise_df)
+    }
+
+    peak_df <- titre_below_30 |> filter(log2_mean == max(log2_mean)) |>
+      select(subjectNo, days_bleed, log2_mean, timepoint)
+
+    if(!str_detect(peak_df$timepoint, "BLA|BLC"))
+    {
+      draws_time     <- subject_titre$days_bleed
+      meas_after_inf <- draws_time[draws_time - inf_time > 0]
+      next_meas      <- min(meas_after_inf)
+
+      if(next_meas - inf_time > tol)
+      {
+        cat("\n-------Rejection III---------")
+        cat("\n Subject id: ", subject_id)
+        cat("\n Infection time: ", inf_time)
+        cat("\n Next meas after infection: ", next_meas)
+        cat("\n Time to next meas: ", next_meas - inf_time)
+        return(NULL)
+      }
+
+      rise_df <- data.frame(subject_id     = subject_id,
+                            baseline       = NA,
+                            baseline_time  = NA,
+                            peak           = NA,
+                            peak_time      = inf_time,
+                            infection_time = inf_time) |>
+        mutate(rise       = NA,
+               delta_t    = NA,
+               serostatus = NA)
+
+      return(rise_df)
+    }
+
+    peak_time <- peak_df$days_bleed
+
+    baseline_df <- titre_below_30 |> filter(days_bleed < peak_time,
+                                            peak_time - days_bleed < tol) |>
+      filter(log2_mean == min(log2_mean))
+
+    rise_df <- data.frame(subject_id     = subject_id,
+                          baseline       = baseline_df$log2_mean,
+                          baseline_time  = baseline_df$days_bleed,
+                          peak           = peak_df$log2_mean,
+                          peak_time      = peak_time,
+                          infection_time = inf_time) |>
+      mutate(rise   = peak - baseline,
+             delta_t = peak_time - baseline_time,
+             serostatus = ifelse(baseline == 0, "Seronegative", "Seropositive"))
+
+  })
+}

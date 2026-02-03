@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(boot)
 library(dplyr)
@@ -14,6 +14,7 @@ library(flavipack)
 library(lubridate)
 library(purrr)
 library(readr)
+library(readxl)
 library(stringr)
 library(tidyr)
 
@@ -31,6 +32,15 @@ plot_S1()
 ggsave("./plots/suppl/S1.png")
 ```
 
+# S2
+
+```{r S2_chunk, fig.height = 4, fig.width = 4}
+plot_S2()
+
+ggsave("./plots/suppl/S2.png")
+```
+
+
 # S3
 
 ```{r S3_chunk}
@@ -46,4 +56,22 @@ plot_S4()
 
 ggsave("./plots/suppl/S4.png")
 ```
+
+# S5
+
+```{r S5_chunk}
+plot_S5()
+
+ggsave("./plots/suppl/S5.png")
+```
+
+# S6
+
+```{r S6_chunk}
+plot_S6()
+
+ggsave("./plots/suppl/S6.png")
+```
+
+
 
