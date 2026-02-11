@@ -423,6 +423,38 @@ KFCS_decay_moving_avg_df <- data.frame(
     lower = MA - 1.96 * SE,
     upper = MA + 1.96 * SE) |> 
   mutate(cohort = "KFCS")
+
+KFCS_mean_decay_less_10 <- KFCS_decay |> filter(age <= 10) |>
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean()
+
+KFCS_mean_decay_20_30 <- KFCS_decay |> filter(age > 20,
+                                              age < 30) |>   
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean()
+
+KFCS_mean_decay_over_40 <- KFCS_decay |> filter(age > 40) |> pull(slope) |> 
+  mean()
+
+df40_ind <- KFCS_decay  |> 
+  filter(age >= 40) |> 
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop")
+
+m  <- mean(df40_ind$decay_rate)
+se <- sd(df40_ind$decay_rate) / sqrt(nrow(df40_ind))
+
+KFCS_decay_estimates_above_40 <- c(mean  = m,
+                                   lower = m - 1.96 * se,
+                                   upper = m + 1.96 * se) |> round(2)
 ```
 
 ```{r}
@@ -448,7 +480,20 @@ decay_df <- imap_dfr(df_list, \(df, i) {
 ```
 
 ```{r}
-mean_decay_less_10 <- decay_df |> filter(age <= 10) |> pull(slope) |> mean()
+NMC_mean_decay_less_10 <- decay_df |> filter(age <= 10) |>   
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean()
+
+mean_decay_over_20 <- decay_df |> filter(age > 20) |> 
+    group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean() |> 
+  round(2)
 
 ages <- decay_df$age |> unique() |> sort()
 

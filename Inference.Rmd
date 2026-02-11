@@ -1,0 +1,841 @@
+---
+title: "Inference"
+output: html_document
+date: "2025-12-10"
+---
+
+```{r setup, include=FALSE}
+library(boot)
+library(flavipack)
+library(future)
+library(furrr)
+library(dplyr)
+library(lubridate)
+library(nloptr)
+library(pomp)
+library(purrr)
+library(readr)
+library(stringr)
+library(tidyr)
+
+source("./R_scripts/cohort_utils.R")
+source("./R_scripts/DGP.R")
+source("./R_scripts/inference.R")
+source("./R_scripts/plots.R")
+```
+
+```{r}
+data_obj <- get_inference_data()
+
+age_inf_data_list <- data_obj$age_inf_data_list
+titre_data_list   <- data_obj$titre_data_list
+final_age_vctr    <- data_obj$final_age_vctr
+```
+
+# Single dataset
+
+## MLE
+
+```{r}
+start_list <- get_starting_points("one_dataset")
+
+plan(multisession, workers = availableCores())
+
+res_list <- find_MLE(start_list, age_inf_data_list, 
+                     final_age_vctr, n_indiv = 1e4)
+
+plan(sequential)
+```
+
+# Profile likelihood
+
+```{r}
+n_indiv <- 1e4
+
+ll_df   <- get_loglik()
+
+box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
+
+plan(multisession, workers = availableCores())
+
+colnames <- c("lambda_1", "lambda_2", "rho")
+
+profile_list <- vector(mode = "list", length = length(colnames))
+
+names(profile_list) <- colnames
+```
+
+## Lambda 1
+
+```{r}
+param <- "lambda_1"
+#-------------------------------------------------------------------------------
+lambda_1_vals <- seq(0.05, 0.065, by = 0.001)
+
+set.seed(2174)
+
+profile_design(
+  lambda_1  = lambda_1_vals,
+  lower = box[1, setdiff(colnames, param)],
+  upper = box[2, setdiff(colnames, param)],
+  nprof = 20, type = "sobol"
+) -> guesses_df
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof_objs <- construct_profile(starting_points   = sp_list,
+                               fixed_pos         = 1,
+                               age_inf_data_list = age_inf_data_list,
+                               final_age_vctr    = final_age_vctr,
+                               n_indiv           = n_indiv,
+                               ds                = "one_dataset")
+
+df                    <- format_profile_df(prof_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+## Lambda 2
+
+```{r}
+param <- "lambda_2"
+#-------------------------------------------------------------------------------
+lambda_2_vals <- seq(0.07, 0.10, by = 0.001)
+
+set.seed(0954)
+
+guesses_df <- profile_design(
+  lambda_2  = lambda_2_vals,
+  lower = box[1, setdiff(colnames, param)],
+  upper = box[2, setdiff(colnames, param)],
+  nprof = 20, type = "sobol") 
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof2_objs <- construct_profile(starting_points   = sp_list,
+                                fixed_pos         = 2,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr,
+                                n_indiv           = n_indiv,
+                                ds                = "one_dataset")
+
+df                    <- format_profile_df(prof2_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+## rho
+
+```{r}
+param <- "rho"
+#-------------------------------------------------------------------------------
+rho_vals <- seq(0.005, 0.011, by = 0.0001)
+
+set.seed(1002)
+
+guesses_df <- profile_design(
+  rho   = rho_vals,
+  lower = box[1, setdiff(colnames, param)],
+  upper = box[2, setdiff(colnames, param)],
+  nprof = 20, type = "sobol") 
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof3_objs <- construct_profile(starting_points   = sp_list,
+                                fixed_pos         = 3,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr,
+                                n_indiv           = n_indiv,
+                                ds                = "one_dataset")
+
+df                    <- format_profile_df(prof3_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+## Confidence intervals
+
+```{r}
+db_df <- do.call(rbind, profile_list) |> bind_rows(ll_df)
+
+L_max        <- db_df |> filter(ll == max(ll)) |> pull(ll)
+alpha        <- 0.05
+cutoff_value <- L_max - 0.5 * qchisq(1 - alpha, df = 1)
+```
+
+```{r}
+plot_options_list <- list(list(x_pos = 0.055,
+                               lbl   = "lambda[1]"),
+                          list(x_pos = 0.08,
+                               lbl   = "lambda[2]"),
+                          list(x_pos = 0.007,
+                               lbl   = "rho"))
+
+p_list <- purrr::map(seq_len(length(plot_options_list)), \(i) {
+  
+  param_df   <- profile_list[[i]]
+  param_name <- colnames[[i]]
+
+  ci_df <- param_df |> filter(ll >= cutoff_value)
+
+  ci_vals <- ci_df[[param_name]] |> range()
+
+  p_options <- plot_options_list[[i]]
+
+  plot_profile(param_df |>
+                 rename(value = all_of(param_name)),
+               cutoff_value, p_options$x_pos, -424, ci_vals, p_options$lbl)
+  
+})
+```
+
+```{r, message = FALSE}
+p_list[[1]] | p_list[[2]] | p_list[[3]]
+```
+
+## Fit
+
+```{r}
+boundaries_df <- db_df |> 
+  filter(ll > max(ll, na.rm = T) - 3.5) |> 
+  select(-ll)
+
+sapply(boundaries_df, function(col) {
+  min_col <- min(col)
+}) -> lower_lims
+
+sapply(boundaries_df, function(col) {
+  max_col <- max(col)
+}) -> upper_lims
+
+set.seed(1202)
+
+n_sims <- 1000
+
+param_list <- sobol_design(lower = lower_lims,
+                           upper = upper_lims,
+                           nseq  = n_sims) |> 
+  transpose()
+```
+
+```{r}
+breaks <- c(0, 10, 20, 30, 40, 50, 60, Inf)
+labels <- c("0-9","10-19", "20-29",
+            "30-39", "40-49", "50-59", "60+")
+
+cohort_df1 <- KFCS_get_infection_df() |> 
+  mutate(subject_id = as.factor(subjectNo) |> as.numeric()) |> 
+  select(subject_id, age_round) |> 
+  rename(age_sample = age_round) |> 
+  filter(age_sample >= 2)
+
+cohort_df2 <- CPC_get_infection_df() |> 
+  select(subject_id, age) |> 
+  mutate(subject_id = as.factor(subject_id) |> as.numeric()) |> 
+  rename(age_sample = age) |> 
+  filter(age_sample >= 2)
+
+
+
+plan(sequential)
+plan(multisession, workers = availableCores() - 1)
+
+set.seed(1418)
+seed_vec_2 <- sample.int(1e7, n_sims)
+
+sim_list <- future_imap(param_list, \(param_obj, iter_val) {
+  
+  set.seed(1422)
+  seed_vec <- sample.int(1e7, 10)
+  
+  pars <- link_pars(param_obj)
+  
+  ll_val <- log_lik_prob_inf(pars, age_inf_data_list, final_age_vctr, n_indiv, 
+                             seed_vec)
+  
+  ll_val <- -ll_val
+  
+  set.seed(seed_vec_2[[iter_val]])
+  
+  simulate_two_cohorts(iter_val, param_obj, cohort_df1, cohort_df2,
+                                 breaks, labels, ll_val)
+})
+```
+
+```{r}
+pred_list <- lapply(1:2, \(c_idx) {
+  
+  sims_cohort <- map_df(sim_list, str_glue("cohort_{c_idx}")) |> 
+    mutate(weight     = exp(log_lik - mean(log_lik)),
+           rel_weight = weight / sum(weight)) 
+  
+  df_list <- split(sims_cohort, sims_cohort$age_bin)
+  
+  summary_pred_age_inf <- map_df(df_list, \(df) {
+  
+    quantiles <- wquant(df$pct, df$rel_weight,
+                        probs = c(0.025, 0.25, 0.5, 0.75, 0.975))
+  
+    data.frame(age      = unique(df$age_bin),
+               value    = quantiles,
+               label    = c("q2.5", "q25", "q50", "q75", "q97.5"))
+  }) |> pivot_wider(names_from = label, values_from = value)
+})
+
+saveRDS(pred_list, "./saved_objects/inference/one_dataset/pred.rds")
+```
+
+# Two datasets
+
+
+## MLE
+
+```{r}
+start_list <- get_starting_points("two_datasets")
+
+plan(multisession, workers = availableCores())
+
+res_list <- find_MLE_2(start_list, titre_data_list,
+                     age_inf_data_list, final_age_vctr, n_indiv = 1e4,
+                     "two_datasets")
+
+plan(sequential)
+```
+
+# Profile likelihood
+
+```{r}
+n_indiv <- 1e4
+
+ll_df   <- get_loglik_2("two_datasets")
+
+box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
+
+plan(multisession, workers = availableCores())
+
+colnames <- c("lambda_1", "lambda_2", "rho", "log_A0", "phi", "sd")
+
+profile_list <- vector(mode = "list", length = length(colnames))
+
+names(profile_list) <- colnames
+
+arg_list <- list(titre_data_list   = titre_data_list,
+                 age_inf_data_list = age_inf_data_list,
+                 final_age_vctr    = final_age_vctr,
+                 n_indiv           = n_indiv,
+                 ds                = "two_datasets")
+```
+
+## Lambda 1
+
+```{r}
+param <- "lambda_1"
+#-------------------------------------------------------------------------------
+lambda_1_vals <- seq(0.05, 0.06, by = 0.0002)
+
+set.seed(2174)
+
+profile_design(
+  lambda_1  = lambda_1_vals,
+  lower = box[1, setdiff(colnames, param)],
+  upper = box[2, setdiff(colnames, param)],
+  nprof = 20, type = "sobol"
+) -> guesses_df
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+arg_list$fixed_pos       <- 1
+arg_list$starting_points <- sp_list
+
+prof_objs <- do.call(construct_profile, arg_list)
+#-------------------------------------------------------------------------------
+df                    <- format_profile_df(prof_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+
+## Lambda 2
+
+```{r}
+param <- "lambda_2"
+#-------------------------------------------------------------------------------
+lambda_2_vals <- seq(0.07, 0.10, by = 0.001)
+
+set.seed(0954)
+
+guesses_df <- profile_design(
+  lambda_2  = lambda_2_vals,
+  lower = box[1, setdiff(colnames, param)],
+  upper = box[2, setdiff(colnames, param)],
+  nprof = 20, type = "sobol") 
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof2_objs <- construct_profile(starting_points   = sp_list,
+                                fixed_pos         = 2,
+                                titre_data_list   = titre_data_list,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr,
+                                n_indiv           = n_indiv,
+                                ds                = "two_datasets")
+
+df                    <- format_profile_df(prof2_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+```{r}
+param <- "rho"
+#-------------------------------------------------------------------------------
+rho_vals <- seq(0.005, 0.011, by = 0.0002)
+
+set.seed(1002)
+
+guesses_df <- profile_design(
+  rho   = rho_vals,
+  lower = box[1, setdiff(colnames, param)],
+  upper = box[2, setdiff(colnames, param)],
+  nprof = 20, type = "sobol") 
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof3_objs <- construct_profile(starting_points   = sp_list,
+                                fixed_pos         = 3,
+                                titre_data_list   = titre_data_list,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr,
+                                n_indiv           = n_indiv,
+                                ds                = "two_datasets")
+
+df                    <- format_profile_df(prof3_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+```{r}
+param <- "log_A0"
+#-------------------------------------------------------------------------------
+log_A0_vals <- seq(1.1, 1.8, by = 0.01)
+
+set.seed(0836)
+
+guesses_df <- profile_design(
+  log_A0 = log_A0_vals,
+  lower  = box[1, setdiff(colnames, param)],
+  upper  = box[2, setdiff(colnames, param)],
+  nprof  = 20, type = "sobol") 
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+prof4_objs <- construct_profile(starting_points   = sp_list,
+                                fixed_pos         = 4,
+                                titre_data_list   = titre_data_list,
+                                age_inf_data_list = age_inf_data_list,
+                                final_age_vctr    = final_age_vctr,
+                                n_indiv           = n_indiv,
+                                ds                = "two_datasets")
+
+df                    <- format_profile_df(prof4_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+```{r}
+param <- "phi"
+#-------------------------------------------------------------------------------
+phi_vals <- seq(5.9, 6.5, by = 0.01)
+
+set.seed(2109)
+
+guesses_df <- profile_design(
+  phi    = phi_vals,
+  lower  = box[1, setdiff(colnames, param)],
+  upper  = box[2, setdiff(colnames, param)],
+  nprof  = 20, type = "sobol") 
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+arg_list$fixed_pos       <- 5
+arg_list$starting_points <- sp_list
+
+prof5_objs <- do.call(construct_profile, arg_list)
+#-------------------------------------------------------------------------------
+df                    <- format_profile_df(prof5_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+## Standard deviation
+
+```{r}
+param <- "sd"
+#-------------------------------------------------------------------------------
+sd_vals <- seq(2.5, 3.2, by = 0.01)
+
+set.seed(2118)
+
+guesses_df <- profile_design(
+  sd     = sd_vals,
+  lower  = box[1, setdiff(colnames, param)],
+  upper  = box[2, setdiff(colnames, param)],
+  nprof  = 20, type = "sobol")
+
+guesses_df <- guesses_df[, colnames]
+
+# starting points(sp)
+sp_list <- transpose(guesses_df)
+
+arg_list$fixed_pos       <- 6
+arg_list$starting_points <- sp_list
+
+prof6_objs <- do.call(construct_profile, arg_list)
+#-------------------------------------------------------------------------------
+df                    <- format_profile_df(prof6_objs, guesses_df[[param]])
+profile_list[[param]] <- df
+```
+
+```{r}
+db_df <- do.call(rbind, profile_list) |> 
+  bind_rows(ll_df)
+
+max_df       <- db_df |> filter(ll == max(ll)) 
+saveRDS(max_df, "./saved_objects/inference/two_datasets/MLE.rds")
+L_max        <- max_df |> pull(ll)
+alpha        <- 0.05
+cutoff_value <- L_max - 0.5 * qchisq(1 - alpha, df = 1)
+```
+
+```{r}
+plot_options_list <- list(list(x_pos = 0.055,
+                               lbl   = "lambda[1]"),
+                          list(x_pos = 0.08,
+                               lbl   = "lambda[2]"),
+                          list(x_pos = 0.006,
+                               lbl   = "rho"),
+                          list(x_pos = 1.3,
+                               lbl   = "logA0"),
+                          list(x_pos = 6,
+                               lbl   = "phi"),
+                          list(x_pos = 2.8,
+                               lbl   = "sigma"))
+
+p_list <- purrr::map(seq_len(length(plot_options_list)), \(i) {
+  
+  param_df   <- profile_list[[i]]
+  param_name <- colnames[[i]]
+  
+  ci_df <- param_df |> filter(ll >= cutoff_value)
+  
+  ci_vals <- ci_df[[param_name]] |> range()
+  
+  p_options <- plot_options_list[[i]]
+  
+  plot_profile(param_df |> 
+                 rename(value = all_of(param_name)),
+               cutoff_value, p_options$x_pos, -517, ci_vals, p_options$lbl)
+  
+})
+```
+
+```{r, fig.width = 7, fig.height = 7}
+(p_list[[1]] | p_list[[2]] | p_list[[3]]) /
+ (p_list[[4]] | p_list[[5]] | p_list[[6]]) 
+```
+
+# Fit
+
+```{r}
+boundaries_df <- db_df |> 
+  filter(ll > max(ll, na.rm = T) - 3.5) |> 
+  select(-ll)
+
+sapply(boundaries_df, function(col) {
+  min_col <- min(col)
+}) -> lower_lims
+
+sapply(boundaries_df, function(col) {
+  max_col <- max(col)
+}) -> upper_lims
+
+set.seed(1435)
+
+n_sims <- 1000
+
+param_list <- sobol_design(lower = lower_lims,
+                           upper = upper_lims,
+                           nseq  = n_sims) |> 
+  transpose()
+```
+
+```{r}
+cohort_df1 <- KFCS_get_infection_df() |> 
+  mutate(subject_id = as.factor(subjectNo) |> as.numeric()) |> 
+  select(subject_id, age_round) |> 
+  rename(age_sample = age_round) |> 
+  filter(age_sample >= 2) |> 
+  mutate(key = paste(subject_id, age_sample, sep = "_"))
+
+cohort_df2 <- CPC_get_infection_df() |> 
+  mutate(subject_id = as.factor(subject_id) |> as.numeric()) |> 
+  select(subject_id, age) |> 
+  rename(age_sample = age) |> 
+  filter(age_sample >= 2) |> 
+  mutate(key = paste(subject_id, age_sample, sep = "_"))
+
+keys_list <- list(cohort_df1$key, cohort_df2$key)
+
+n_ids  <- max(cohort_df1$subject_id)
+n_ids2 <- max(cohort_df2$subject_id)
+
+n_ids_vctr <- c(n_ids, n_ids2)
+
+max_age_1 <- max(cohort_df1$age_sample) 
+max_age_2 <- max(cohort_df2$age_sample)
+
+max_ages <- c(max_age_1, max_age_2)
+```
+
+```{r}
+plan(sequential)
+plan(multisession, workers = availableCores() - 1)
+
+
+
+seed_vec_2 <- sample.int(1e7, n_sims)
+sim_list <- future_imap(param_list, \(param_obj, iter) {
+  
+  sd_val <- param_obj$sd
+
+  
+  set.seed(1742)
+  seed_vec <- sample.int(1e7, 10)
+  
+  pars <- link_pars(param_obj)
+  
+  ll_val <- log_lik_titre_prob_inf(pars, titre_data_list, age_inf_data_list,
+                                   final_age_vctr, n_indiv, seed_vec)
+  
+  ll_val <- -ll_val
+  
+  set.seed(seed_vec_2[[iter]])
+  
+  sim_titre_list <- lapply(1:2, \(c_idx) {
+    
+    inf_df <- simulate_DENV_infections_since_birth(
+      lambda_serotype = param_obj[[paste0("lambda_", c_idx)]],
+      loss_rate       = param_obj$rho, 
+      n_individuals   = n_ids_vctr[[c_idx]],
+      final_age       = max_ages[[c_idx]])
+    
+    ids <- seq_len(n_ids_vctr[[c_idx]])
+      
+    inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
+      
+    inf_times_list <- split(inf_df$age,
+                            factor(inf_df$subject_id, levels = ids))
+      
+    titre_mat <- simulate_DENV_long_decay_titres(
+      inf_times_list = inf_times_list,
+      log_first_peak = param_obj$log_A0,
+      decay_rate_vec = get_decay_rate(),
+      phi            = param_obj$phi,
+      beta           = 1,
+      final_age      = max_ages[[c_idx]])
+      
+    titre_mat[titre_mat < 10] <- 5
+
+    log2_titre_mat <- log2_transform(titre_mat)
+
+    sim_df <- as.data.frame(log2_titre_mat) |> 
+      mutate(subject_id = seq_len(n_ids_vctr[[c_idx]]),
+             .before = everything()) |> 
+      pivot_longer(-subject_id, names_to = "age") |> 
+      mutate(age = str_remove(age, "V") |> as.numeric(),
+             key = paste(subject_id, age, sep = "_")) |> 
+        filter(key %in% keys_list[[c_idx]])
+    
+    scaling_factor <- sqrt(titre_data_list[[c_idx]]$n)
+      
+    sim_mean_titre <- sim_df |> group_by(age) |> 
+      summarise(mean = mean(value)) |> 
+      mutate(observation = rnorm(n = n(), mean = mean, 
+                                 sd = sd_val / scaling_factor),
+             .iter = iter,
+             log_lik = ll_val)
+        
+  })
+  
+  list(sim_titre_1  = sim_titre_list[[1]],
+       sim_titre_2  = sim_titre_list[[2]])
+})
+```
+
+```{r}
+pred_list <- lapply(1:2, \(c_idx) {
+  
+  sim_titre <- map_df(sim_list, str_glue("sim_titre_{c_idx}")) |> 
+  mutate(weight     = exp(log_lik - mean(log_lik)),
+         rel_weight = weight / sum(weight)) 
+  
+  df_list <- split(sim_titre, sim_titre$age)
+  
+  summary_pred_titre <- map_df(df_list, \(age_df) {
+  
+    quantiles <- wquant(age_df$observation, age_df$rel_weight,
+                        probs = c(0.025, 0.25, 0.5, 0.75, 0.975))
+  
+    data.frame(age      = unique(age_df$age),
+               value    = quantiles,
+               label    = c("q2.5", "q25", "q50", "q75", "q97.5"))
+  }) |> pivot_wider(names_from = label, values_from = value)
+})
+
+saveRDS(pred_list, "./saved_objects/inference/two_datasets/pred_avg_titre.rds")
+```
+
+```{r}
+plot_fit <- function(pred_df, data_df, clr, sub_txt)
+{
+  ggplot(pred_df, aes(age, q50)) +
+    geom_line(linewidth = 0.5) +
+    geom_ribbon(aes(ymin = q2.5, ymax = q97.5), fill = clr, alpha = 0.5) +
+    geom_point(data = data_df, aes(y = mean), colour = clr) +
+    theme_classic() +
+    scale_y_continuous(limits = c(NA, 12)) +
+    scale_x_continuous(limits = c(NA, 95)) +
+    labs(x = "Age", y = "Mean titre (log2)",
+         subtitle = sub_txt)
+  
+}
+```
+
+
+```{r}
+g1 <- plot_fit(pred_list[[1]], titre_data_list[[1]], KFCS_clr, "KFCS")
+
+g2 <- plot_fit(pred_list[[2]], titre_data_list[[2]], CPC_clr, "CPC")
+
+g1/g2
+```
+
+```{r}
+MLE_obj <- db_df |> filter(ll == max(ll)) |> 
+  as.list()
+
+param_obj <- MLE_obj
+
+set.seed(1141)
+
+plan(sequential)
+plan(multisession, workers = availableCores() - 1)
+
+sim_decay_list <- future_map(1:100, \(iter) {
+  
+  sim_titres_list <- lapply(1:2, \(c_idx) {
+    
+    inf_df <- simulate_DENV_infections_since_birth(
+    lambda_serotype = param_obj[[paste0("lambda_", c_idx)]],
+    loss_rate       = param_obj$rho, 
+    n_individuals   = n_ids_vctr[[c_idx]],
+    final_age       = max_ages[[c_idx]])
+    
+    ids <- seq_len(n_ids_vctr[[c_idx]])
+      
+    inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ] |> 
+      mutate(key = paste(subject_id, age, sep = "_"))
+      
+    inf_times_list <- split(inf_df$age,
+                            factor(inf_df$subject_id, levels = ids))
+      
+    titre_mat <- simulate_DENV_long_decay_titres(
+      inf_times_list = inf_times_list,
+      log_first_peak = param_obj$log_A0,
+      decay_rate_vec = get_decay_rate(),
+      phi            = param_obj$phi,
+      beta           = 1,
+      final_age      = max_ages[[c_idx]])
+      
+    titre_mat[titre_mat < 10] <- 5
+
+    log_titre_mat <- log(titre_mat)
+  
+    sim_df <- as.data.frame(log_titre_mat) |> 
+      mutate(subject_id = seq_len(n_ids_vctr[[c_idx]]),
+             .before = everything()) |> 
+      pivot_longer(-subject_id, names_to = "age") |> 
+      mutate(age    = str_remove(age, "V") |> as.numeric(),
+             key    = paste(subject_id, age, sep = "_"),
+             is_inf = key %in% inf_df$key,
+             inf_idx = cumsum(is_inf),
+             key_inf = paste(subject_id, inf_idx, sep = "_")) 
+  
+  sim_df |> group_by(key_inf) |> 
+    arrange(subject_id, age) |> 
+    mutate(lag_value = lag(value)) |> 
+    filter(lag_value > log(5)) |> 
+    filter(value > log(5)) |> 
+    mutate(decay_rate = value - lag_value,
+           .iter = iter,
+           .c_idx = c_idx) |> 
+    ungroup()
+  })
+  
+  
+}, .options = furrr_options(seed = TRUE))
+
+avg_decay <- map_df(1:2, \(c_idx) {
+  map_df(sim_decay_list, c_idx) |> 
+    group_by(age) |>
+    summarise(mean_decay = mean(decay_rate, na.rm = TRUE)) |>
+    filter(age <= 76) |>
+    mutate(.c_idx = c_idx,
+           cohort = ifelse(c_idx == 1, "KFCS", "NMC"))
+})
+
+saveRDS(avg_decay, "./saved_objects/inference/two_datasets/pred_avg_decay.rds")
+```
+
+# No reinfection hypothesis test (MLE)
+
+
+```{r}
+start_list <- get_starting_points("alternative")
+
+plan(multisession, workers = availableCores())
+
+res_list <- find_MLE_2(start_list, titre_data_list,
+                       age_inf_data_list, final_age_vctr, 
+                       n_indiv = 1e4,
+                       ds      = "alternative")
+
+plan(sequential)
+```
+
+```{r}
+alternative_db <- get_loglik_2("alternative") |> arrange(desc(ll))
+
+alternative_MLE <- alternative_db |> filter(ll == max(ll)) |> 
+  as.list()
+
+saveRDS(alternative_MLE,"./saved_objects/inference/alternative/MLE/MLE.rds")
+```
+
+
+

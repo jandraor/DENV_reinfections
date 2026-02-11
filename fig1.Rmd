@@ -21,11 +21,15 @@ source("./R_scripts/follow_up.R")
 source("./R_scripts/KFCS.R")
 source("./R_scripts/NMC.R")
 source("./R_scripts/plots.R")
+
+type_lvls <- c(str_glue("DENV-{1:4}"), "Untyped/Mixed", "Subclinical")
+
+cohort_lvls <- c("NMC", "CPC", "KFCS")
 ```
 
 # Fig 1A
 
-```{r}
+```{r, fig.width = 10, fig.height = 3}
 NMC_infection_df <- NMC_get_infection_df(1.18) |> filter(is_inf == 1)
 
 NMC_symp_infection <- NMC_infection_df |> filter(PCR_infection == 1)
@@ -35,8 +39,7 @@ NMC_symp_infection$serotype |> table()
 count_inf_df <- NMC_infection_df |> 
   select(subjectNo, collected_year, serotype) |> 
   mutate(serotype = ifelse(serotype == "Unknown", "Untyped/Mixed", serotype),
-         serotype = factor(serotype, levels = c(str_glue("DENV-{1:4}"), 
-                                                "Untyped/Mixed", "Subclinical"))) |> 
+         serotype = factor(serotype, levels = type_lvls)) |> 
   group_by(collected_year, serotype) |> 
   summarise(n_inf   = n(),
             .groups = "drop")
@@ -62,12 +65,14 @@ count_inf_df <- CPC_infection_df |>
   mutate(collected_year = year(collection_date),
          serotype       = str_replace(serotype, "DEN", "DENV-")) |> 
   select(subject_id, collected_year, serotype) |> 
-  mutate(serotype = factor(serotype, 
-                           levels = c(str_glue("DENV-{1:4}"), 
-                                                "Untyped/Mixed", "Subclinical"))) |> 
   group_by(collected_year, serotype) |> 
   summarise(n_inf   = n(),
-            .groups = "drop")
+            .groups = "drop") |> 
+  complete(
+    collected_year,
+    serotype = factor(type_lvls, levels = type_lvls),
+    fill = list(n_inf = 0)) |> 
+  mutate(serotype = factor(serotype, levels = type_lvls))
 
 CPC_n_sub_inf <- count_inf_df |> filter(serotype == "Subclinical") |> 
   pull(n_inf) |> sum()
@@ -92,8 +97,7 @@ count_inf_df <- KFCS_infection_df |>
   mutate(collected_year = year(end_interval)) |> 
   select(subjectNo, collected_year, serotype) |> 
   mutate(serotype = factor(serotype, 
-                           levels = c(str_glue("DENV-{1:4}"), 
-                                                "Untyped/Mixed", "Subclinical"))) |> 
+                           levels = type_lvls)) |> 
   group_by(collected_year, serotype) |> 
   summarise(n_inf   = n(),
             .groups = "drop")
@@ -138,7 +142,10 @@ NMC_age_bin_inf <- NMC_age_bin_inf |> add_binomial_CI() |>
   mutate(cohort = "NMC",
          country = "PHL")
 #-------------------------------------------------------------------------------
-age_bin_inf <- bind_rows(CPC_age_bin_inf, NMC_age_bin_inf)
+age_bin_inf <- bind_rows(CPC_age_bin_inf, NMC_age_bin_inf) |> 
+    complete(age_bin, 
+    cohort = factor(cohort_lvls, levels = cohort_lvls),
+    fill   = list(pct = NA)) 
 
 # Needs Inference.Rmd to be run
 pred_df <- readRDS("./saved_objects/inference/one_dataset/pred.rds")[[2]] |> 
@@ -163,7 +170,10 @@ KFCS_age_bin_inf <- KFCS_age_inf_df |> mutate(age_bin = cut(age_round,
          cohort = "KFCS")
 
 KFCS_age_bin_inf <- KFCS_age_bin_inf |> add_binomial_CI() |> 
-  mutate(country = "THA")
+  mutate(country = "THA") |> 
+  complete(age_bin, 
+  cohort = factor(cohort_lvls, levels = cohort_lvls),
+  fill   = list(pct = NA)) 
 
 # Needs Inference.Rmd to be run
 pred_df <- readRDS("./saved_objects/inference/one_dataset/pred.rds")[[1]] |> 
@@ -179,109 +189,51 @@ fig_1E
 ```{r}
 breaks <- c(0, 20, 40, 60, Inf)
 labels <- c("0-19","20-39", "40-59", "60+")
-
-breaks <- c(0, 10, 20, 30, 40, 50, 60, Inf)
-labels <- c("0-9","10-19", "20-29",
-            "30-39", "40-49", "50-59", "60+")
 #-------------------------------------------------------------------------------
 CPC_symp_age_bins <- CPC_get_prob_symp_inf() |> 
   filter(age >= 2) |> 
   group_symp_infection_in_bins(breaks, labels) |> 
   add_binomial_symp_CI() |> 
-  mutate(cohort = "CPC",
-         rr     = pct_symp_given_age / (sum(n_symp) / sum(n_individuals))) 
+  mutate(cohort = "CPC")
 
-df_list <- split(CPC_symp_age_bins, CPC_symp_age_bins$age_bin)
+x1 <- CPC_symp_age_bins |> slice(1) |> pull(pct_symp_given_age)
 
-CPC_rr <- estimate_symptomatic_RR(df_list, sum(CPC_symp_age_bins$n_symp),
-                                  sum(CPC_symp_age_bins$n_individuals)) |> 
-  mutate(cohort  = "CPC",
-         country = "PHL") 
+y1 <- CPC_symp_age_bins |> slice(2:3) |> 
+  summarise(pct_symp_given_age = sum(n_symp) / sum(n_individuals)) |> pull(pct_symp_given_age)
 #-------------------------------------------------------------------------------
 KFCS_symp_age_bins <- KFCS_get_prob_symp_inf() |> 
   filter(age_round >= 2) |> 
   rename(age = age_round) |> 
   group_symp_infection_in_bins(breaks, labels) |> 
   add_binomial_symp_CI() |> 
-  mutate(cohort  = "KFCS",
-         rr      = pct_symp_given_age / (sum(n_symp) / sum(n_individuals))) 
+  mutate(cohort  = "KFCS") 
 
-df_list <- split(KFCS_symp_age_bins, KFCS_symp_age_bins$age_bin)
+x2 <- KFCS_symp_age_bins |> slice(1) |> pull(pct_symp_given_age)
 
-KFCS_rr <- estimate_symptomatic_RR(df_list, sum(KFCS_symp_age_bins$n_symp),
-                                   sum(KFCS_symp_age_bins$n_individuals)) |> 
-  mutate(cohort  = "KFCS",
-         country = "THA") 
+y2 <- KFCS_symp_age_bins |> slice(2:3) |> summarise(pct_symp_given_age = sum(n_symp) / sum(n_individuals)) |> pull(pct_symp_given_age)
 #-------------------------------------------------------------------------------
 NMC_symp_age_bins <- NMC_get_prob_symp_inf() |> 
   filter(age >= 2) |> 
   group_symp_infection_in_bins(breaks, labels) |> 
   add_binomial_symp_CI() |> 
-  mutate(cohort  = "NMC",
-         rr      = pct_symp_given_age / (sum(n_symp) / sum(n_individuals))) 
+  mutate(cohort  = "NMC") 
 
-df_list <- split(NMC_symp_age_bins, NMC_symp_age_bins$age_bin)
-
-NMC_rr <- estimate_symptomatic_RR(df_list, sum(NMC_symp_age_bins$n_symp),
-                                   sum(NMC_symp_age_bins$n_individuals)) |> 
-  mutate(cohort  = "NMC",
-         country = "PHL")  
-
-rr_df <- bind_rows(CPC_rr,
-                   KFCS_rr,
-                   NMC_rr)
-
+x3 <- NMC_symp_age_bins |> slice(1) |> pull(pct_symp_given_age)
+#-------------------------------------------------------------------------------
 n_symp <- sum(CPC_symp_age_bins$n_symp) +
   sum(NMC_symp_age_bins$n_symp) + 
   sum(KFCS_symp_age_bins$n_symp)
+
+avg_prob_symp_given_age_less_20 <- mean(c(x1, x2, x3)) |> round(3)
+
+avg_prob_symp_given_age_20_50   <- mean(c(y1, y2)) |> round(3)
 
 n_inf <- sum(CPC_symp_age_bins$n_infections) +
   sum(NMC_symp_age_bins$n_infections) +
   sum(KFCS_symp_age_bins$n_infections)
 
 pct_symp <- n_symp / n_inf
-
-n_symp <- sum(CPC_symp_age_bins |> slice(1:2) |> pull(n_symp)) +
-  sum(NMC_symp_age_bins |> slice(1:2) |> pull(n_symp)) +
-  sum(KFCS_symp_age_bins |> slice(1:2) |> pull(n_symp)) 
-
-n_inf <- sum(CPC_symp_age_bins |> slice(1:2) |> pull(n_infections)) +
-  sum(NMC_symp_age_bins |> slice(1:2) |> pull(n_infections)) +
-  sum(KFCS_symp_age_bins |> slice(1:2) |> pull(n_infections)) 
-
-pct_symp_0_19 <- n_symp / n_inf
-
 #-------------------------------------------------------------------------------
-
-CPC_symp_20_59 <- sum(CPC_symp_age_bins |> slice(3:6) |> pull(n_symp))
-
-NMC_symp_20_59 <- sum(NMC_symp_age_bins |> slice(3) |> pull(n_symp))
-
-KFCS_symp_20_59 <- sum(KFCS_symp_age_bins |> slice(3:6) |> pull(n_symp)) 
-
-n_symp_20_59 <- CPC_symp_20_59 + NMC_symp_20_59 + KFCS_symp_20_59
-
-CPC_n_inf_20_59  <- sum(CPC_symp_age_bins |> slice(3:6) |> pull(n_infections)) 
-
-NMC_n_inf_20_59  <- sum(NMC_symp_age_bins |> slice(3) |> pull(n_infections)) 
-
-KFCS_n_inf_20_59 <- sum(KFCS_symp_age_bins |> slice(3:6) |> pull(n_infections)) 
-  
-n_inf_20_59 <- CPC_n_inf_20_59 + NMC_n_inf_20_59 + KFCS_n_inf_20_59
-
-c("CPC"  = CPC_symp_20_59  / CPC_n_inf_20_59,
-  "NMC"  = NMC_symp_20_59  / NMC_n_inf_20_59,
-  "KFCS" = KFCS_symp_20_59 / KFCS_n_inf_20_59)
-
-n  <- 112    # total infections in >60y
-p0 <- 0.03  # expected probability of symptomatic infection
-x  <- 0      # observed symptomatic infections
-
-pct_symp_20_59 <- n_symp_20_59  / n_inf_20_59 
-
-p_value <- pbinom(0, size = 112, prob = pct_symp_20_59)
-p_value
-
 prob_symp_age_df <- bind_rows(CPC_symp_age_bins, KFCS_symp_age_bins,
                               NMC_symp_age_bins)
 
@@ -290,10 +242,22 @@ fig_1F <- plot_1F(prob_symp_age_df)
 fig_1F
 ```
 
+```{r, fig.width = 10}
+fig_1D_to_1F <- (fig_1D | fig_1E | fig_1F) +
+    plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+fig_1D_to_1F
+```
+
+
 
 ```{r, fig.width = 10, fig.height = 6}
-fig1 <- ((fig_1A | fig_1B | fig_1C) /
-           (fig_1D | fig_1E | fig_1F)) +
+fig_1A_to_1C <- (fig_1A | fig_1B | fig_1C) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+fig1 <- (fig_1A_to_1C / fig_1D_to_1F) +
   plot_annotation(tag_levels = 'A')
 
 ggsave(plot = fig1, "./plots/fig1.png", width = 10, height = 6,

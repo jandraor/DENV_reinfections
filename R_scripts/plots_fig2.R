@@ -17,8 +17,9 @@ plot_2B <- function(df, df2)
     labs(x     = "Baseline (log2)", y = "Rise (log2)",
          shape = NULL) +
     scale_y_continuous(limits = c(0, NA)) +
+    scale_shape_manual(values = c(2, 16)) +
     geom_line(data = df2, aes(x = baseline, y = rise), colour = "grey50") +
-    theme(legend.text = element_text(color = "grey55"),
+    theme(legend.text = element_text(color = "grey55", colour = 14),
           legend.position = c(0.4, 0.25),
           legend.direction = "vertical",
           legend.margin = margin(t = 3, r = 3, b = 3, l = 3),

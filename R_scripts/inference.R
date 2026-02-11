@@ -392,8 +392,28 @@ get_loglik <- function()
 
 get_loglik_2 <- function(ds)
 {
+  if(ds == "two_datasets")
+  {
+    par_names <- c("lambda_1",
+                   "lambda_2",
+                   "rho" ,
+                   "log_A0" ,
+                   "phi" ,
+                   "sd")
 
-  fldr <- str_glue("./saved_objects/inference/two_datasets/MLE")
+  }
+
+  if(ds == "alternative")
+  {
+    par_names <- c("lambda_1",
+                   "lambda_2",
+                   "log_A0" ,
+                   "phi" ,
+                   "sd")
+  }
+
+
+  fldr <- str_glue("./saved_objects/inference/{ds}/MLE")
 
   files <- list.files(path = fldr, pattern = "^opt")
 
@@ -409,14 +429,9 @@ get_loglik_2 <- function(ds)
 
     if(status == 5) return (NULL)
 
-    names(sol) <- c("lambda_1",
-                    "lambda_2",
-                    "rho" ,
-                    "log_A0" ,
-                    "phi" ,
-                    "sd")
+    names(sol) <- par_names
 
-    for (nm in names(inverse_link_funs))
+    for (nm in names(sol))
     {
       sol[[nm]] <- inverse_link_funs[[nm]](sol[[nm]])
     }
