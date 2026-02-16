@@ -4,7 +4,9 @@ dmy2 <- function(date_str, threshold = 2025) {
   date
 }
 
-KFCS_read_data <- function()
+# Impute value: Value assigned to measurements <10. In this dataset, values are
+#   already imputed to 5.
+KFCS_read_data <- function(imputed_value = NULL)
 {
   KFCS_df <- read_csv("./data/KFCS/KFCS_longData.csv",
            show_col_types = FALSE) |>
@@ -18,15 +20,22 @@ KFCS_read_data <- function()
     mutate(
       across(
         .cols = matches("HAI"),
-        .fns = ~na_if(., 0))
-    ) |>
+        .fns = ~na_if(., 0)))
+
+  if(!is.null(imputed_value))
+  {
+    KFCS_df <- KFCS_df |>
+      mutate(across(matches("HAI"), ~ if_else(.x == 5, imputed_value, .x)))
+  }
+
+  KFCS_df <- KFCS_df |>
     mutate(
       across(
         .cols = matches("HAI"),
         .fns = list(log2 = log2_transform, log = log),
         .names = "{.fn}_{.col}"))
 
-  KFCS_df |>
+  KFCS_df <- KFCS_df |>
     mutate(log2_mean_start_DEN =
              rowMeans(select(KFCS_df, starts_with("log2_START_HAI_DEN")),
                       na.rm = TRUE),
@@ -39,15 +48,27 @@ KFCS_read_data <- function()
            log_mean_end_DEN =
              rowMeans(select(KFCS_df, starts_with("log_END_HAI_DEN")),
                       na.rm = TRUE))
+
+  KFCS_seroneg_ids <- KFCS_df |>
+    select(subjectNo, start_interval, log2_mean_start_DEN) |>
+    group_by(subjectNo) |>
+    filter(start_interval == min(start_interval),
+           log2_mean_start_DEN == 0) |> pull(subjectNo) |> unique()
+
+  KFCS_df <- KFCS_df |>
+    mutate(serostatus = ifelse(subjectNo %in% KFCS_seroneg_ids,
+                               "seronegative", "seropositive"))
+
+  KFCS_df
 }
 
-KFCS_get_infection_df <- function()
+KFCS_get_infection_df <- function(imputed_val = NULL)
 {
-  KFCS_df <- KFCS_read_data()
+  KFCS_df <- KFCS_read_data(imputed_val)
 
   infection_df <- KFCS_df |>
-    select(subjectNo, dateBirth2, start_interval, log2_mean_start_DEN,
-           end_interval, log2_mean_end_DEN,
+    select(subjectNo, serostatus, dateBirth2, start_interval,
+           log2_mean_start_DEN, end_interval, log2_mean_end_DEN,
            log_mean_start_DEN, log_mean_end_DEN, xgBoostPred) |>
     mutate(age_start    = as.numeric(start_interval - dateBirth2) / 365.25,
            age_end      = as.numeric(end_interval - dateBirth2) / 365.25,
@@ -306,7 +327,10 @@ KFCS_get_prob_symp_inf <- function()
 
 KFCS_estimate_deltas <- function(df)
 {
-  df <- df |> filter(!is_inf) # to remove short-term dynamics
+  # to remove short-term dynamics
+  df <- df |>
+    mutate(prev_meas_inf = lag(is_inf, default = FALSE)) |>
+    filter(!is_inf) |> filter(!prev_meas_inf)
 
   n_rows <- nrow(df)
 
@@ -374,7 +398,9 @@ KFCS_get_titre_data <- function()
 {
   KFCS_df <- KFCS_read_data() |>
     select(subjectNo, dateBirth2, log2_mean_start_DEN, log2_mean_end_DEN,
-           log_mean_start_DEN, log_mean_end_DEN, start_interval, end_interval)
+           log_mean_start_DEN, log_mean_end_DEN, start_interval, end_interval,
+           starts_with("log2_START_HAI_DEN"),
+           starts_with("log2_END_HAI_DEN"))
 
   df_list <- split(KFCS_df, KFCS_df$subjectNo)
 
@@ -392,10 +418,51 @@ KFCS_get_titre_data <- function()
                     first_row_df$log2_mean_end_DEN[1],
                     rest_df$log2_mean_end_DEN)
 
+    log2_D1_vals <- c(first_row_df$log2_START_HAI_DEN1[1],
+                      first_row_df$log2_END_HAI_DEN1[1],
+                      rest_df$log2_END_HAI_DEN1)
+
+    log2_D2_vals <- c(first_row_df$log2_START_HAI_DEN2[1],
+                      first_row_df$log2_END_HAI_DEN2[1],
+                      rest_df$log2_END_HAI_DEN2)
+
+    log2_D3_vals <- c(first_row_df$log2_START_HAI_DEN3[1],
+                      first_row_df$log2_END_HAI_DEN3[1],
+                      rest_df$log2_END_HAI_DEN3)
+
+    log2_D4_vals <- c(first_row_df$log2_START_HAI_DEN4[1],
+                      first_row_df$log2_END_HAI_DEN4[1],
+                      rest_df$log2_END_HAI_DEN4)
+
     data.frame(subjectNo       = unique(df$subjectNo),
                dateBirth2      = unique(df$dateBirth2),
                collection_date = collection_dates,
-               log2_mean       = log2_means) |>
+               log2_mean       = log2_means,
+               log2_D1         = log2_D1_vals,
+               log2_D2         = log2_D2_vals,
+               log2_D3         = log2_D3_vals,
+               log2_D4         = log2_D4_vals) |>
       mutate(age = round(as.numeric(collection_date - dateBirth2) / 365.25))
   })
+}
+
+KFCS_get_decay_rates <- function()
+{
+  KFCS_decay <- KFCS_get_infection_df() |>
+    group_by(subjectNo) |>
+    arrange(subjectNo, start_interval) |>
+    mutate(inf_idx = cumsum(is_inf)) |>
+    filter(!(serostatus == "seronegative" & inf_idx == 0)) |>
+    mutate(prev_meas_inf = lag(is_inf, default = FALSE)) |>
+    ungroup() |>
+    filter(!is_inf) |>
+    filter(!prev_meas_inf) |>
+    mutate(titre_diff = log_mean_end_DEN - log_mean_start_DEN,
+           time_diff  = as.numeric(end_interval - start_interval) / 365.25,
+           slope      = titre_diff / time_diff)|>
+    rename(age = age_round) |>
+    filter(age  >= 2,
+           between(time_diff, 0.9, 2))
+
+  KFCS_decay
 }

@@ -187,50 +187,6 @@ plot_S3 <- function()
 
 plot_S4 <- function()
 {
-  sens_df <- map_df(c(1, 1.18, 1.5), \(cutoff) {
-
-    mean_df <- NMC_get_binned_decay(cutoff) |>
-      mutate(cutoff_val = as.factor(cutoff))
-
-    mean_df
-  }) |> filter(n > 30)
-
-  df_list <- split(sens_df, sens_df$cutoff_val)
-
-  slope_df <- imap_dfr(df_list, \(df, co) {
-
-    fit <- lm(mean ~ 0 + bin_delta, data = df)
-
-    ci <- confint(fit, level = 0.95)
-
-    data.frame(
-      cut_off = co,
-      slope   = coef(fit)[["bin_delta"]],
-      lower   = ci["bin_delta", 1],
-      upper = ci["bin_delta", 2])
-  })
-
-  ggplot(sens_df, aes(bin_delta, mean)) +
-    geom_smooth(method = "lm", formula = y ~ 0 + x,
-                aes(group = cutoff_val, linetype = cutoff_val),
-                colour = NMC_all,
-                fullrange = TRUE, se  = FALSE) +
-    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
-    expand_limits(x = 0, y = 0) +
-    labs(x = "Years between blood draws",
-         y = "Titre difference (log2)",
-         linetype = "Cutoff") +
-    scale_x_continuous(limits = c(0, NA)) +
-    theme(
-      legend.position = "inside",
-      legend.position.inside = c(0.3, 0.3),
-      legend.key.width = unit(1.5, "cm")) +
-     guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
-
-}
-
-plot_S5 <- function()
-{
 
   raw <- read_excel("./data/NMC/NMC Laboratory testing result to Henrik 23JUNE23.xlsx")
 
@@ -321,4 +277,100 @@ plot_S6 <- function()
     geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
     scale_x_continuous(n.breaks = 6) +
     labs(y = "Frequency", x = "Rise in titers (log2 scale)")
+}
+
+plot_S6 <- function()
+{
+  sens_df <- map_df(c(1, 1.18, 1.5), \(cutoff) {
+
+    mean_df <- NMC_get_binned_decay(cutoff) |>
+      mutate(cutoff_val = as.factor(cutoff))
+
+    mean_df
+  }) |> filter(n > 30)
+
+  df_list <- split(sens_df, sens_df$cutoff_val)
+
+  slope_df <- imap_dfr(df_list, \(df, co) {
+
+    fit <- lm(mean ~ 0 + bin_delta, data = df)
+
+    ci <- confint(fit, level = 0.95)
+
+    data.frame(
+      cut_off = co,
+      slope   = coef(fit)[["bin_delta"]],
+      lower   = ci["bin_delta", 1],
+      upper = ci["bin_delta", 2])
+  })
+
+  ggplot(sens_df, aes(bin_delta, mean)) +
+    geom_smooth(method = "lm", formula = y ~ 0 + x,
+                aes(group = cutoff_val, linetype = cutoff_val),
+                colour = NMC_all,
+                fullrange = TRUE, se  = FALSE) +
+    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+    expand_limits(x = 0, y = 0) +
+    labs(x = "Years between blood draws",
+         y = "Titre difference (log2)",
+         linetype = "Cutoff") +
+    scale_x_continuous(limits = c(0, NA)) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.3, 0.3),
+      legend.key.width = unit(1.5, "cm")) +
+    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
+
+}
+
+plot_S8 <- function()
+{
+  df <- map_df(c(2, 5, 8), \(imputed_val) {
+
+    KFCS_infection_detection_df <- KFCS_get_infection_df(imputed_val)
+
+    KFCS_infection_df <- KFCS_infection_detection_df |>
+      group_by(subjectNo) |>
+      arrange(subjectNo, start_interval) |>
+      mutate(inf_idx = cumsum(is_inf),
+             inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
+      ungroup()
+
+    df_list <- split(KFCS_infection_df, KFCS_infection_df$inf_id)
+
+    KFCS_delta_df <- map_df(df_list, KFCS_estimate_deltas) |>
+      mutate(bin_delta    = round(delta_time, 0))
+
+    KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI() |>
+      mutate(cohort = "KFCS",
+             imputed_val = as.factor(imputed_val)) |>
+      filter(bin_delta > 0)
+
+    fit <- lm(mean ~ 0 + bin_delta, data = KFCS_mean_estimates)
+    print(fit)
+
+    print(round(confint(fit), 2))
+
+    KFCS_mean_estimates
+  })
+
+  ggplot(df, aes(bin_delta, mean)) +
+    geom_smooth(method = "lm", formula = y ~ 0 + x,
+                aes(group = imputed_val,
+                    linetype = imputed_val),
+                alpha = 0.1,
+                fullrange = TRUE,
+                se = FALSE,
+                colour = KFCS_clr) +
+    expand_limits(x = 0, y = 0) +
+    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+    labs(x = "Years between blood draws",
+         y = "Titre difference (log2)",
+         linetype = "Imputed value") +
+    scale_x_continuous(limits = c(0, NA)) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.3, 0.3),
+      legend.key.width = unit(1.5, "cm")) +
+    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
 }

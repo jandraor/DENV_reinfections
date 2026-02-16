@@ -1,7 +1,6 @@
 ---
 title: "Data analysis"
 author: "Jair Andrade"
-date: "2025-09-22"
 output: html_document
 ---
 
@@ -381,20 +380,9 @@ fig_2D
 ## Fig 2E
 
 ```{r}
-KFCS_decay <- KFCS_get_infection_df() |> 
-  filter(
-    !is_inf,
-    log_mean_end_DEN > log(5),
-    log_mean_start_DEN > log(5)) |> 
-  mutate(titre_diff = log_mean_end_DEN - log_mean_start_DEN,
-         time_diff  = as.numeric(end_interval - start_interval) / 365.25,
-         slope      = titre_diff / time_diff)|> 
-  rename(age = age_round) |> 
-  filter(age  >= 2,
-         between(time_diff, 0.9, 2))
+KFCS_decay_df <- KFCS_get_decay_rates()
 
-
-ages <- KFCS_decay |> 
+ages <- KFCS_decay_df |> 
   filter(age <= 76) |> 
   pull(age) |> unique() |>
   sort()
@@ -404,7 +392,7 @@ max_age <- ages[length(ages) - 1]
 
 moving_avg <- sapply(min_age:max_age, function(a) {
   
-  window_values <- KFCS_decay |> 
+  window_values <- KFCS_decay_df |> 
     filter(age %in% (a-1):(a + 1)) |>  
     pull(slope)
   
@@ -424,14 +412,14 @@ KFCS_decay_moving_avg_df <- data.frame(
     upper = MA + 1.96 * SE) |> 
   mutate(cohort = "KFCS")
 
-KFCS_mean_decay_less_10 <- KFCS_decay |> filter(age <= 10) |>
+KFCS_mean_decay_less_10 <- KFCS_decay_df |> filter(age <= 10) |>
   group_by(subjectNo) |> 
   summarise(
     decay_rate = mean(slope, na.rm = TRUE),
     .groups = "drop") |> 
   pull(decay_rate) |> mean()
 
-KFCS_mean_decay_20_30 <- KFCS_decay |> filter(age > 20,
+KFCS_mean_decay_20_30 <- KFCS_decay_df |> filter(age > 20,
                                               age < 30) |>   
   group_by(subjectNo) |> 
   summarise(
@@ -439,10 +427,10 @@ KFCS_mean_decay_20_30 <- KFCS_decay |> filter(age > 20,
     .groups = "drop") |> 
   pull(decay_rate) |> mean()
 
-KFCS_mean_decay_over_40 <- KFCS_decay |> filter(age > 40) |> pull(slope) |> 
+KFCS_mean_decay_over_40 <- KFCS_decay_df |> filter(age > 40) |> pull(slope) |> 
   mean()
 
-df40_ind <- KFCS_decay  |> 
+df40_ind <- KFCS_decay_df  |> 
   filter(age >= 40) |> 
   group_by(subjectNo) |> 
   summarise(
@@ -458,28 +446,8 @@ KFCS_decay_estimates_above_40 <- c(mean  = m,
 ```
 
 ```{r}
-df_list <- split(infection_df, infection_df$inf_id)
+decay_df <- NMC_get_decay_rates()
 
-df_list <- unname(df_list)
-
-decay_df <- imap_dfr(df_list, \(df, i) {
-  
-  df <- filter_short_term_dynamics(df, plac_inf)
-  
-  if(nrow(df) <= 1) return(NULL)
-  
-  df |>
-    mutate(prev_log_mean  = lag(log_mean),
-           prev_log_mean  = ifelse(prev_log_mean == log(5), NA, prev_log_mean),
-           log_mean       = ifelse(log_mean == log(5), NA, log_mean),
-           titre_diff     = log_mean - prev_log_mean,
-           time_diff      = (days_bleed - lag(days_bleed)) / 365,
-           slope          = titre_diff / time_diff) |> 
-  filter(!is.na(slope),  between(time_diff, 0.9, 2))
-})
-```
-
-```{r}
 NMC_mean_decay_less_10 <- decay_df |> filter(age <= 10) |>   
   group_by(subjectNo) |> 
   summarise(
@@ -533,6 +501,8 @@ ggsave("./plots/2E.png", width = 2.5, height = 2.5)
 
 fig_2E
 ```
+
+
 
 # Fig 2F
 

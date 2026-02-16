@@ -453,7 +453,7 @@ link_pars <- function(param_obj)
   param_obj
 }
 
-get_decay_rate <- function() 0.3 * exp(-0.5*(0:3))
+get_decay_rate <- function() 0.2 * exp(-0.5*(0:3))
 
 source("./R_scripts/inference_data.R")
 source("./R_scripts/inference_profile.R")

@@ -20,6 +20,7 @@ library(tidyr)
 
 source("./R_scripts/cohort_utils.R")
 source("./R_scripts/follow_up.R")
+source("./R_scripts/KFCS.R")
 source("./R_scripts/NMC.R")
 source("./R_scripts/plots.R")
 ```
@@ -72,6 +73,16 @@ plot_S6()
 
 ggsave("./plots/suppl/S6.png")
 ```
+
+# S8
+
+```{r S8_chunk}
+plot_S8()
+
+ggsave("./plots/suppl/S8.png", width = 5, height = 3)
+```
+
+
 
 
 

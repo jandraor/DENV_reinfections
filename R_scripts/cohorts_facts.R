@@ -75,3 +75,30 @@ KFCS_enrolment |>
   group_by(serostatus) |> summarise(n = n()) |> mutate(pct = n / sum(n))
 
 KFCS_range_inclusion <- KFCS_enrolment |> pull(age) |> range()
+
+#-------------------------------------------------------------------------------
+
+plac_df |> select(subjectNo, starts_with("log2_D")) |>
+  pivot_longer(-subjectNo) |>
+  mutate(below_LOD = ifelse(value == 0, TRUE, FALSE)) |>
+  group_by(below_LOD) |>
+  summarise(n = n()) |>
+  mutate(pct = n / sum(n))
+
+#-------------------------------------------------------------------------------
+
+n_all_5 <- KFCS_df |> filter(log2_mean == 0) |> nrow()
+
+total_meas <- nrow(KFCS_df)
+
+n_all_5 / total_meas
+
+#-------------------------------------------------------------------------------
+
+KFCS_df |> select(subjectNo, starts_with("log2_D")) |>
+  pivot_longer(-subjectNo) |>
+  mutate(below_LOD = ifelse(value == 0, TRUE, FALSE)) |>
+  group_by(below_LOD) |>
+  summarise(n = n()) |>
+  mutate(pct = n / sum(n))
+
