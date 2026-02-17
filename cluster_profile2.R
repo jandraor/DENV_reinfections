@@ -22,7 +22,7 @@ final_age_vctr    <- data_obj$final_age_vctr
 #-------------------------------------------------------------------------------
 n_indiv <- 1e4
 
-ll_df   <- get_loglik_2()
+ll_df   <- get_loglik_2("two_datasets")
 
 box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
 
@@ -102,7 +102,7 @@ if(param == "lambda_2")
 # rho --------------------------------------------------------------------------
 if(param == "rho")
 {
-  rho_vals <- seq(0.005, 0.011, by = 0.0002)
+  rho_vals <- seq(0.004, 0.010, by = 0.0001)
 
   set.seed(1002)
 
@@ -154,7 +154,7 @@ if(param == "log_A0")
 # phi---------------------------------------------------------------------------
 if(param == "phi")
 {
-  phi_vals <- seq(5.9, 6.5, by = 0.01)
+  phi_vals <- seq(5.4, 5.9, by = 0.01)
 
   set.seed(2109)
 
