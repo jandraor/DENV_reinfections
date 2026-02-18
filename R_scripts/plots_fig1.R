@@ -25,9 +25,11 @@ plot_1A <- function(df)
 
 plot_1B <- function(df)
 {
-  ggplot(df, aes(x = collected_year, y = n_inf, fill = serotype)) +
+  # For CPC, samples were collected in the first trimester of every year.
+  #  Therefore, it is more likely than infections occurred in the year before.
+  ggplot(df, aes(x = collected_year - 1, y = n_inf, fill = serotype)) +
     geom_bar(stat = "identity") +
-    scale_x_continuous(breaks = 2013:2014) +
+    scale_x_continuous(breaks = 2012:2013) +
     labs(x = "Year", y = NULL, subtitle = "CPC",
          fill = NULL) +
     scale_y_continuous(breaks = c(0, 70, 140)) +

@@ -38,38 +38,49 @@ plot_S1 <- function()
           legend.position.inside = c(0.8,0.8))
 }
 
-
-plot_S2 <- function()
+plot_S3_S4 <- function()
 {
-  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
+  summary_list <- NMC_get_measurements_summary()
 
-  infection_df <- infection_detection_df |>
-    filter(is_inf == 1)
+  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18) |>
+    mutate(std_log2_D1 = log2_D1_NT - summary_list$means[["log2_D1_NT"]],
+           std_log2_D2 = log2_D2_NT - summary_list$means[["log2_D2_NT"]],
+           std_log2_D3 = log2_D3_NT - summary_list$means[["log2_D3_NT"]],
+           std_log2_D4 = log2_D4_NT - summary_list$means[["log2_D4_NT"]],
+           is_inf = ifelse(is.na(is_inf), 0, is_inf))
+
+  inf_detection_all_df <- infection_detection_df |>
+    select(subjectNo, days_bleed, is_inf, contains("log2_D"))
+
+  infection_df <- inf_detection_all_df |> filter(is_inf == 1)
 
   ids <- infection_df |> group_by(subjectNo) |>
     summarise(n_inf = n()) |>
-    filter(n_inf < 4) |> pull(subjectNo)
+    filter(n_inf < 4) |>  # there are few individuals with >=4 infections
+    pull(subjectNo)
 
-  blood_after_df <- infection_detection_df |> filter(subjectNo %in% ids) |>
+  blood_after_df <- infection_df |> filter(subjectNo %in% ids) |>
     arrange(subjectNo, days_bleed) |>
     group_by(subjectNo) |>
-    mutate(prev_outcome = lag(is_inf)) |>
-    filter(prev_outcome == 1 & is_inf == 0) |>
     mutate(seq_inf = row_number()) |>
     select(subjectNo, seq_inf, contains("log2_D")) |>
     ungroup()
 
   blood_after_df$max_sero <- max.col(blood_after_df[, c(3:6)])
 
+  blood_after_df$max_sero_std <- max.col(blood_after_df[, c(7:10)])
+
   df_list <- split(blood_after_df, blood_after_df$subjectNo)
 
   blood_after_df <- map_df(df_list, \(df) {
 
-    df$n_distinct <- NA
+    df$n_distinct     <- NA
+    df$n_distinct_std <- NA
 
     for(i in seq_len(nrow(df)))
     {
-      df[i, "n_distinct"] <- df$max_sero[1:i] |> unique() |> length()
+      df[i, "n_distinct"]     <- df$max_sero[1:i] |> unique() |> length()
+      df[i, "n_distinct_std"] <- df$max_sero_std[1:i] |> unique() |> length()
     }
 
     df
@@ -83,109 +94,114 @@ plot_S2 <- function()
   summary_df <- blood_after_df |>
     group_by(seq_inf) |>
     summarise(
-      mean = mean(n_distinct),
-      lower = boot_ci(n_distinct)[1],
-      upper = boot_ci(n_distinct)[2],
+      mean      = mean(n_distinct),
+      lower     = boot_ci(n_distinct)[1],
+      upper     = boot_ci(n_distinct)[2],
+      mean_std  = mean(n_distinct_std),
+      lower_std = boot_ci(n_distinct_std)[1],
+      upper_std = boot_ci(n_distinct_std)[2],
       .groups = "drop")
 
-  ggplot(summary_df, aes(seq_inf)) +
-    geom_line(aes(y = mean), colour = NMC_all) +
-    geom_pointrange(aes(y = mean, ymin = lower, ymax = upper),
+  fit <- lm(I(mean - 1) ~ 0 + I(seq_inf - 1), data = summary_df)
+
+  p <- predict(fit, newdata = data.frame(seq_inf = c(1,2,3)))
+
+  summary_df$pred_mean <- p + 1
+
+  fit2 <- lm(I(mean_std - 1) ~ 0 + I(seq_inf - 1), data = summary_df)
+
+  p2 <- predict(fit2, newdata = data.frame(seq_inf = c(1,2,3)))
+
+  summary_df$pred_mean_std <- p2 + 1
+
+  g_S2 <- ggplot(summary_df, aes(seq_inf)) +
+    geom_line(aes(y = pred_mean, linetype = "Unadjusted"), colour = "grey60") +
+    geom_line(aes(y = pred_mean_std, linetype = "Assay adjusted"),
+              colour = NMC_all) +
+    geom_pointrange(aes(y = mean_std, ymin = lower_std, ymax = upper_std),
                     colour = NMC_all) +
     scale_y_continuous(limits = c(0.91, 3),
                        breaks = 1:3) +
     scale_x_continuous(breaks = 1:3) +
+    scale_linetype_manual(values = c("solid", "dashed")) +
     geom_hline(yintercept = 1, linetype = "dotted", colour = "grey50") +
     annotate("text", label = "Original antigenic sin",
              x = 2, y = 0.925) +
-    annotate("text", x = 2.3, y = 1.55, label = "Observed", angle = 25,
-             colour = NMC_all, hjust = 0) +
     geom_abline(slope = 1, intercept = 0, linetype = "dotted") +
     annotate("text", x = 2, y = 2.125,
              label = "Independece across serotypes", angle = 45) +
     coord_equal(xlim = c(1, NA)) +
     labs(x = "Number of infection",
-         y = "# of serotypes with the highest titer")
+         y = "# of serotypes with the highest titer",
+         linetype = NULL) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.3, 0.8),
+      legend.key.width = unit(1.5, "cm")) +
+    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
+
+  inf_detect_seroneg_df <- infection_detection_df |>
+    filter(serostatus == "seronegative")
+
+  inf_seroneg_df <- inf_detect_seroneg_df |> filter(is_inf == 1)
+
+  seroneg_ids <- inf_seroneg_df |> group_by(subjectNo) |>
+    summarise(n_inf = n()) |>
+    filter(n_inf < 4) |>  # there are few individuals with >=4 infections
+    pull(subjectNo)
+
+  bld_after_seroneg_df <- blood_after_df |>
+    filter(subjectNo %in% seroneg_ids)
+
+  summary_seroneg_df <- bld_after_seroneg_df |>
+    group_by(seq_inf) |>
+    summarise(
+      mean_std  = mean(n_distinct_std),
+      lower_std = boot_ci(n_distinct_std)[1],
+      upper_std = boot_ci(n_distinct_std)[2],
+      .groups = "drop")
+
+  fit3 <- lm(I(mean_std - 1) ~ 0 + I(seq_inf - 1), data = summary_seroneg_df )
+
+  p3 <- predict(fit3, newdata = data.frame(seq_inf = c(1,2,3)))
+
+  summary_seroneg_df$pred_mean_std <- p3 + 1
+
+
+  g_S3 <- ggplot(summary_df, aes(seq_inf)) +
+    geom_line(aes(y = pred_mean_std, linetype = "All individuals"),
+              colour = "grey50",
+              position = position_nudge(x = 0.02)) +
+    geom_line(data = summary_seroneg_df,
+              aes(y = pred_mean_std, linetype = "Seronegative"),
+              colour = NMC_all,
+              position = position_nudge(x = -0.02)) +
+    geom_pointrange(aes(y = mean_std, ymin = lower_std, ymax = upper_std),
+                    colour = "grey50",
+                    position = position_nudge(x = 0.02)) +
+    geom_pointrange(data = summary_seroneg_df,
+                    aes(y = mean_std, ymin = lower_std, ymax = upper_std),
+                    colour = NMC_all,
+                    position = position_nudge(x = -0.02)) +
+    scale_y_continuous(limits = c(0.91, 3),
+                       breaks = 1:3) +
+    scale_x_continuous(breaks = 1:3) +
+    scale_linetype_manual(values = c("dashed", "solid")) +
+    coord_equal(xlim = c(1, NA)) +
+    labs(x = "Number of infection",
+         y = "# of serotypes with the highest titer",
+         linetype = NULL) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.3, 0.6),
+      legend.key.width = unit(1.5, "cm")) +
+    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
+
+  list(S2 = g_S2,
+       S3 = g_S3)
 }
 
-plot_S3 <- function()
-{
-  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
-
-  plac_ids <- unique(infection_detection_df$subjectNo)
-
-  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
-
-  infection_df <- infection_detection_df |>
-    mutate(is_inf = ifelse(is.na(is_inf), 0, is_inf)) |>
-    group_by(subjectNo) |>
-    mutate(inf_idx = cumsum(is_inf),
-           inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
-    ungroup()
-
-  df_list <- split(infection_df, infection_df$inf_id)
-
-  delta_df <- map_df(df_list, \(df) {
-
-    df <- filter_short_term_dynamics(df, plac_inf, 365)
-
-    if(nrow(df) <= 1) return(NULL)
-
-    pairwise_delta_by_serotype(df)
-  }) |> mutate(delta_year = delta_time / 365,
-               bin_delta  = round(delta_year, 0)) |>
-    select(inf_id, contains("delta"), -delta_time, -delta_year) |>
-    pivot_longer(c(-inf_id, -bin_delta),
-                 values_to = "delta_titre",
-                 names_to = "serotype") |>
-    mutate(serotype = str_replace(serotype, "delta_titre_D", "DENV")) |>
-    filter(!is.na(delta_titre))
-
-  df_list <- split(delta_df, delta_df$serotype)
-
-  delta_summary_df <- map_df(df_list, \(df) {
-
-    summary_df <- df |> add_bootstrap_CI() |>
-      mutate(serotype = unique(df$serotype)) |>
-      filter(n > 30)
-
-    fit <- lm(mean ~ 0 + bin_delta, data = summary_df)
-
-    slope <- fit$coefficients[[1]]
-
-    summary_df <- summary_df |> mutate(slope = round(slope, 2))
-  })
-
-  ggplot(delta_summary_df, aes(bin_delta, mean)) +
-    geom_smooth(method = "lm", formula = y ~ 0 + x,
-                aes(group = serotype, fill = serotype, colour = serotype),
-                fullrange = TRUE,
-                se = FALSE) +
-    geom_errorbar(aes(ymin = q2.5, ymax = q97.5, x = bin_delta,
-                      colour = serotype),
-                  width = 0) +
-    geom_point(aes(colour = serotype, x = bin_delta, y = mean),
-               shape = 15, size = 2) +
-   expand_limits(x = 0, y = 0) +
-   scale_x_continuous(limits = c(0, 8)) +
-   scale_y_continuous(limits = c(-2, NA)) +
-    scale_colour_manual(values = c("DENV1" = DENV_1_4[[1]],
-                                   "DENV2" = DENV_1_4[[2]],
-                                   "DENV3" = DENV_1_4[[3]],
-                                   "DENV4" = DENV_1_4[[4]])) +
-    scale_fill_manual(values = c("DENV1" = DENV_1_4[[1]],
-                                 "DENV2" = DENV_1_4[[2]],
-                                 "DENV3" = DENV_1_4[[3]],
-                                 "DENV4" = DENV_1_4[[4]])) +
-    labs(x = "Years between blood draws",
-         y = "Titre difference (log2)",
-         fill   = "",
-         colour = "") +
-    theme(legend.position = "inside",
-          legend.position.inside = c(0.35, 0.35))
-}
-
-plot_S4 <- function()
+plot_S5 <- function()
 {
 
   raw <- read_excel("./data/NMC/NMC Laboratory testing result to Henrik 23JUNE23.xlsx")
@@ -266,20 +282,12 @@ plot_S4 <- function()
                         ymin = avg.hai - 1.96 * sd.hai / sqrt(N),
                         ymax = avg.hai + 1.96 * sd.hai / sqrt(N)),
                     alpha = 0.5, colour = NMC_all) +
-    labs(x = 'PRNT (log2)', y = 'HAI (log2)')
+    labs(
+      x = expression(PRNT~(log[2]^"*")),
+      y = expression(HAI~(log[2]^"*")))
 }
 
-plot_S6 <- function()
-{
-  rise_df <- NMC_get_PCR_rise()
-
-  ggplot(rise_df, aes(rise)) +
-    geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
-    scale_x_continuous(n.breaks = 6) +
-    labs(y = "Frequency", x = "Rise in titers (log2 scale)")
-}
-
-plot_S6 <- function()
+plot_S8 <- function()
 {
   sens_df <- map_df(c(1, 1.18, 1.5), \(cutoff) {
 
@@ -321,6 +329,94 @@ plot_S6 <- function()
       legend.key.width = unit(1.5, "cm")) +
     guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
 
+}
+
+plot_S6 <- function()
+{
+  rise_df <- NMC_get_PCR_rise()
+
+  ggplot(rise_df, aes(rise)) +
+    geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
+    scale_x_continuous(n.breaks = 6) +
+    labs(y = "Frequency",
+         x = expression("Rise in titers (" * log[2]^"*" * " scale)"))
+}
+
+plot_S7 <- function()
+{
+  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
+
+  plac_ids <- unique(infection_detection_df$subjectNo)
+
+  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
+
+  infection_df <- infection_detection_df |>
+    mutate(is_inf = ifelse(is.na(is_inf), 0, is_inf)) |>
+    group_by(subjectNo) |>
+    mutate(inf_idx = cumsum(is_inf),
+           inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
+    ungroup()
+
+  df_list <- split(infection_df, infection_df$inf_id)
+
+  delta_df <- map_df(df_list, \(df) {
+
+    df <- filter_short_term_dynamics(df, plac_inf, 365)
+
+    if(nrow(df) <= 1) return(NULL)
+
+    pairwise_delta_by_serotype(df)
+  }) |> mutate(delta_year = delta_time / 365,
+               bin_delta  = round(delta_year, 0)) |>
+    select(inf_id, contains("delta"), -delta_time, -delta_year) |>
+    pivot_longer(c(-inf_id, -bin_delta),
+                 values_to = "delta_titre",
+                 names_to = "serotype") |>
+    mutate(serotype = str_replace(serotype, "delta_titre_D", "DENV")) |>
+    filter(!is.na(delta_titre))
+
+  df_list <- split(delta_df, delta_df$serotype)
+
+  delta_summary_df <- map_df(df_list, \(df) {
+
+    summary_df <- df |> add_bootstrap_CI() |>
+      mutate(serotype = unique(df$serotype)) |>
+      filter(n > 30)
+
+    fit <- lm(mean ~ 0 + bin_delta, data = summary_df)
+
+    slope <- fit$coefficients[[1]]
+
+    summary_df <- summary_df |> mutate(slope = round(slope, 2))
+  })
+
+  ggplot(delta_summary_df, aes(bin_delta, mean)) +
+    geom_smooth(method = "lm", formula = y ~ 0 + x,
+                aes(group = serotype, fill = serotype, colour = serotype),
+                fullrange = TRUE,
+                se = FALSE) +
+    geom_errorbar(aes(ymin = q2.5, ymax = q97.5, x = bin_delta,
+                      colour = serotype),
+                  width = 0) +
+    geom_point(aes(colour = serotype, x = bin_delta, y = mean),
+               shape = 15, size = 2) +
+    expand_limits(x = 0, y = 0) +
+    scale_x_continuous(limits = c(0, 8)) +
+    scale_y_continuous(limits = c(-2, NA)) +
+    scale_colour_manual(values = c("DENV1" = DENV_1_4[[1]],
+                                   "DENV2" = DENV_1_4[[2]],
+                                   "DENV3" = DENV_1_4[[3]],
+                                   "DENV4" = DENV_1_4[[4]])) +
+    scale_fill_manual(values = c("DENV1" = DENV_1_4[[1]],
+                                 "DENV2" = DENV_1_4[[2]],
+                                 "DENV3" = DENV_1_4[[3]],
+                                 "DENV4" = DENV_1_4[[4]])) +
+    labs(x = "Years between blood draws",
+         y = expression("Titer difference (" * log[2]^"*" * ")"),
+         fill   = "",
+         colour = "") +
+    theme(legend.position = "inside",
+          legend.position.inside = c(0.35, 0.35))
 }
 
 plot_S8 <- function()

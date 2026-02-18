@@ -415,7 +415,7 @@ get_loglik_2 <- function(ds)
 
   fldr <- str_glue("./saved_objects/inference/{ds}/MLE")
 
-  files <- list.files(path = fldr, pattern = "^opt")
+  files <- list.files(path = fldr, pattern = "^opt_")
 
   sol_df <- map_df(files, \(fn) {
 

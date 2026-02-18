@@ -473,3 +473,24 @@ NMC_get_decay_rates <- function()
       filter(!is.na(slope),  between(time_diff, 0.9, 2))
   })
 }
+
+NMC_get_measurements_summary <- function()
+{
+  fn <- "./data/NMC/NMC_measurements_summary.rds"
+
+  if(!file.exists(fn))
+  {
+    df <- NMC_get_placebo_data() |> select(starts_with("log2_D"))
+
+    means <- colMeans(df, na.rm = TRUE)
+    sds   <- sapply(df, sd, na.rm = TRUE)
+
+    summary_list <- list(means = means,
+                         sds   = sds)
+
+    saveRDS(summary_list, fn)
+
+  } else summary_list <- readRDS(fn)
+
+  summary_list
+}
