@@ -91,12 +91,10 @@ if(param == "lambda_2")
   # starting points(sp)
   sp_list <- transpose(guesses_df)
 
-  prof2_objs <- construct_profile(starting_points   = sp_list,
-                                  fixed_pos         = 2,
-                                  titre_data_list   = titre_data_list,
-                                  age_inf_data_list = age_inf_data_list,
-                                  final_age_vctr    = final_age_vctr,
-                                  n_indiv           = n_indiv)
+  arg_list$fixed_pos       <- 2
+  arg_list$starting_points <- sp_list
+
+  prof2_objs <- do.call(construct_profile, arg_list)
 }
 
 # rho --------------------------------------------------------------------------
@@ -117,12 +115,10 @@ if(param == "rho")
   # starting points(sp)
   sp_list <- transpose(guesses_df)
 
-  prof3_objs <- construct_profile(starting_points   = sp_list,
-                                  fixed_pos         = 3,
-                                  titre_data_list   = titre_data_list,
-                                  age_inf_data_list = age_inf_data_list,
-                                  final_age_vctr    = final_age_vctr,
-                                  n_indiv           = n_indiv)
+  arg_list$fixed_pos       <- 3
+  arg_list$starting_points <- sp_list
+
+  prof3_objs <- do.call(construct_profile, arg_list)
 }
 
 # log_A0------------------------------------------------------------------------
@@ -143,12 +139,10 @@ if(param == "log_A0")
   # starting points(sp)
   sp_list <- transpose(guesses_df)
 
-  prof4_objs <- construct_profile(starting_points   = sp_list,
-                                  fixed_pos         = 4,
-                                  titre_data_list   = titre_data_list,
-                                  age_inf_data_list = age_inf_data_list,
-                                  final_age_vctr    = final_age_vctr,
-                                  n_indiv           = n_indiv)
+  arg_list$fixed_pos       <- 4
+  arg_list$starting_points <- sp_list
+
+  prof4_objs <- do.call(construct_profile, arg_list)
 }
 
 # phi---------------------------------------------------------------------------
