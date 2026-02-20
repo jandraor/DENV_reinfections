@@ -102,3 +102,61 @@ KFCS_df |> select(subjectNo, starts_with("log2_D")) |>
   summarise(n = n()) |>
   mutate(pct = n / sum(n))
 
+#-------------------------------------------------------------------------------
+
+HS_infections <- read_csv("./data/NMC/Salje_et_al_2021/infection_simulations.csv") |>
+  filter(vaccine == 0) |>
+  group_by(simID) |>
+  summarise(n_infections = n())
+
+
+HS_summary <- HS_infections |>
+  summarise(
+    q2.5  = quantile(n_infections, 0.025),
+    mean  = mean(n_infections),
+    q97.5 = quantile(n_infections, 0.975))
+
+finalSubjectData <- read.table("./data/NMC/Salje_et_al_2021/SubjectData.extra_v2.txt")
+
+colnames(finalSubjectData)<-c("newID","sero","vaccine","NoAssays",
+                              "NoSympSerKnown","NoSympSerUnknown",
+                              "delayStartStudy","delayLastBlood",
+                              "delayStartVac3","delayStartVac1",
+                              "delayLastAnnualDraw","SeroStatB1","seroY1")
+
+HS_plac_individuals <-  finalSubjectData |>  filter(vaccine == 0) |>
+  mutate(plac_id = row_number(),
+         range_days = (delayLastBlood - delayStartVac3),
+         range      =  range_days / 365)
+
+HS_person_years <- sum(HS_plac_individuals$range)
+
+HS_incidence <- HS_summary$mean / HS_person_years
+
+plac_df <- NMC_get_placebo_data()
+
+anchor_df <- plac_df |> filter(visit_no == 6) |>
+  select(subjectNo, days_bleed) |>
+  arrange(subjectNo) |>
+  mutate(plac_id = row_number()) |>
+  left_join(HS_plac_individuals[, c("plac_id", "range_days")],
+            by = "plac_id") |>
+  mutate(final_draw = days_bleed + range_days) |>
+  rename(start_draw = days_bleed)
+
+range_df <- plac_df |> select(subjectNo, days_bleed) |>
+  left_join(anchor_df[, c("subjectNo", "start_draw", "final_draw")],
+            by = "subjectNo") |>
+  filter(days_bleed >= start_draw & days_bleed <= final_draw) |>
+  group_by(subjectNo) |>
+  summarise(range = (max(days_bleed) - min(days_bleed)) / 365)
+
+person_years <- sum(range_df$range)
+
+subset_inf_df <- NMC_get_infection_df() |>
+  select(subjectNo, days_bleed, is_inf) |>
+  left_join(anchor_df[, c("subjectNo", "start_draw", "final_draw")],
+            by = "subjectNo") |>
+  filter(days_bleed > start_draw & days_bleed <= final_draw)
+
+n_inf <- sum(subset_inf_df$is_inf)

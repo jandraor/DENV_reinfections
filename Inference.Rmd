@@ -383,14 +383,11 @@ guesses_df <- guesses_df[, colnames]
 # starting points(sp)
 sp_list <- transpose(guesses_df)
 
-prof2_objs <- construct_profile(starting_points   = sp_list,
-                                fixed_pos         = 2,
-                                titre_data_list   = titre_data_list,
-                                age_inf_data_list = age_inf_data_list,
-                                final_age_vctr    = final_age_vctr,
-                                n_indiv           = n_indiv,
-                                ds                = "two_datasets")
+arg_list$fixed_pos       <- 2
+arg_list$starting_points <- sp_list
 
+prof2_objs <- do.call(construct_profile, arg_list)
+#-------------------------------------------------------------------------------
 df                    <- format_profile_df(prof2_objs, guesses_df[[param]])
 profile_list[[param]] <- df
 ```
@@ -413,14 +410,11 @@ guesses_df <- guesses_df[, colnames]
 # starting points(sp)
 sp_list <- transpose(guesses_df)
 
-prof3_objs <- construct_profile(starting_points   = sp_list,
-                                fixed_pos         = 3,
-                                titre_data_list   = titre_data_list,
-                                age_inf_data_list = age_inf_data_list,
-                                final_age_vctr    = final_age_vctr,
-                                n_indiv           = n_indiv,
-                                ds                = "two_datasets")
+arg_list$fixed_pos       <- 3
+arg_list$starting_points <- sp_list
 
+prof3_objs <- do.call(construct_profile, arg_list)
+#-------------------------------------------------------------------------------
 df                    <- format_profile_df(prof3_objs, guesses_df[[param]])
 profile_list[[param]] <- df
 ```
@@ -443,14 +437,11 @@ guesses_df <- guesses_df[, colnames]
 # starting points(sp)
 sp_list <- transpose(guesses_df)
 
-prof4_objs <- construct_profile(starting_points   = sp_list,
-                                fixed_pos         = 4,
-                                titre_data_list   = titre_data_list,
-                                age_inf_data_list = age_inf_data_list,
-                                final_age_vctr    = final_age_vctr,
-                                n_indiv           = n_indiv,
-                                ds                = "two_datasets")
+arg_list$fixed_pos       <- 4
+arg_list$starting_points <- sp_list
 
+prof4_objs <- do.call(construct_profile, arg_list)
+#-------------------------------------------------------------------------------
 df                    <- format_profile_df(prof4_objs, guesses_df[[param]])
 profile_list[[param]] <- df
 ```
