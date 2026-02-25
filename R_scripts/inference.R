@@ -12,16 +12,16 @@ approximate_prob_inf_at_age <- function(lambda_serotype,
     mutate(pct = n / n_individuals)
 }
 
-find_MLE <- function(start_list, age_inf_data_list, final_age_vctr, n_indiv)
+find_MLE <- function(start_list, age_inf_data_list, final_age_vctr, n_indiv, ds)
 {
   set.seed(1422)
   seed_vec <- sample.int(1e7, 10)
 
-  future_map(start_list, \(start_obj) {
+  future_map(start_list, \(start_obj, ds) {
 
     iter_id <- start_obj$iter_id
 
-    fn <- str_glue("./saved_objects/inference/one_dataset/MLE/opt_{iter_id}.rds")
+    fn <- str_glue("./saved_objects/inference/{ds}/MLE/opt_{iter_id}.rds")
 
     if(!file.exists(fn))
     {
@@ -46,13 +46,12 @@ find_MLE <- function(start_list, age_inf_data_list, final_age_vctr, n_indiv)
     } else res <- readRDS(fn)
 
     res
-  })
-
+  }, ds = ds)
 }
 
 
 find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
-                     final_age_vctr, n_indiv)
+                     final_age_vctr, n_indiv, ds)
 {
   set.seed(1742)
   seed_vec <- sample.int(1e7, 10)
@@ -61,7 +60,7 @@ find_MLE_2 <- function(start_list, titre_data_list, age_inf_data_list,
 
     iter_id <- start_obj$iter_id
 
-    fn <- str_glue("./saved_objects/inference/two_datasets/MLE/opt_{iter_id}.rds")
+    fn <- str_glue("./saved_objects/inference/{ds}/MLE/opt_{iter_id}.rds")
 
     if(!file.exists(fn))
     {
@@ -125,8 +124,18 @@ get_starting_points <- function(ds)
                 "lambda_2" = 0.25,
                 "rho"      = 0.25),
       nseq =  200)
+  }
 
+  if(ds == "one_dataset_perfect_ht_immunity")
+  {
+    set.seed(25022026)
 
+    start_df <- sobol_design(
+      lower = c("lambda_1" = 0.01,
+                "lambda_2" = 0.01),
+      upper = c("lambda_1" = 0.25,
+                "lambda_2" = 0.25),
+      nseq =  500)
   }
 
   if(ds == "two_datasets")
@@ -147,6 +156,26 @@ get_starting_points <- function(ds)
                 "phi"      = 10,
                 "sd"       = 10),
       nseq =  200)
+  }
+
+  if(ds == "alternative")
+  {
+    set.seed(20260207)
+
+    start_df <- sobol_design(
+      lower = c("lambda_1" = 0.01,
+                "lambda_2" = 0.01,
+                "log_A0"   = 0.1,
+                "phi"      = 1,
+                "sd"       = 0.01),
+      upper = c("lambda_1" = 0.25,
+                "lambda_2" = 0.25,
+                "log_A0"   = 4,
+                "phi"      = 10,
+                "sd"       = 10),
+      nseq =  500)
+
+    stop("No valid dataset ('ds') was provided", call. = FALSE)
   }
 
   par_names <- colnames(start_df)
@@ -172,7 +201,11 @@ log_lik_prob_inf <- function(pars, age_inf_data_list, final_age_vctr, n_indiv,
   lambda_1 <- inv.logit(pars[[1]])
   lambda_2 <- inv.logit(pars[[2]])
   lambdas  <- c(lambda_1, lambda_2)
-  rho      <- inv.logit(pars[[3]])
+
+  if(length(pars) == 2) rho <- 0
+
+  if(length(pars) == 3)  rho <- inv.logit(pars[[3]])
+
 
   # cat("\n---------------")
   # cat("\n lambda 1: ", lambdas[[1]])
@@ -217,22 +250,36 @@ log_lik_prob_inf <- function(pars, age_inf_data_list, final_age_vctr, n_indiv,
 log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
                                    final_age_vctr, n_indiv, seed_vec)
 {
-  # Infection parameters-------------------
+  # FOIs-------------------
   lambda_1 <- inv.logit(pars[[1]])
   lambda_2 <- inv.logit(pars[[2]])
   lambdas  <- c(lambda_1, lambda_2)
-  rho      <- inv.logit(pars[[3]])
+  beta     <- 1
 
   # Decay rate dynamics--------------------
   decay_rate <- get_decay_rate()
 
+  if(length(pars) == 6)
+  {
+    rho      <- inv.logit(pars[[3]])
 
-  # Peak dynamics--------------------------
-  log_A0  <- exp(pars[[4]])
-  phi     <- exp(pars[[5]])
-  beta    <- 1
+    # Peak dynamics--------------------------
+    log_A0  <- exp(pars[[4]])
+    phi     <- exp(pars[[5]])
 
-  sd <- exp(pars[[6]])
+    sd <- exp(pars[[6]])
+  }
+
+  if(length(pars) == 5)
+  {
+    rho <- 0
+
+    # Peak dynamics--------------------------
+    log_A0  <- exp(pars[[3]])
+    phi     <- exp(pars[[4]])
+
+    sd <- exp(pars[[5]])
+  }
 
   # cat("\n---------------")
   # cat("\n lambda 1: ", lambdas[[1]])
@@ -241,6 +288,7 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   # cat("\n log A0: ", log_A0 )
   # cat("\n phi: ", phi)
   # cat("\n sd: ", sd)
+
 
   n_replicates <- length(seed_vec)
 
@@ -257,7 +305,7 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
         n_individuals     = n_indiv)
     })
 
-    ll_age_inf <- sapply(1:2, \(cohort_idx) {
+    ll_age_inf_cohorts <- sapply(1:2, \(cohort_idx) {
 
       inf_df       <- inf_list[[cohort_idx]]
       age_inf_data <- age_inf_data_list[[cohort_idx]]
@@ -265,11 +313,16 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
       age_tab <- tabulate(inf_df$age + 1, nbins = max(final_age_vctr[[cohort_idx]]) + 1)
       prob_inf_age <- age_tab / n_indiv
 
-      dbinom(x    = age_inf_data$n_infections,
-             size = age_inf_data$n_individuals,
-             prob = prob_inf_age[-c(1, 2)],
-             log  = TRUE) |> sum()
-    }) |> sum()
+      ll_vals <- dbinom(
+        x    = age_inf_data$n_infections,
+        size = age_inf_data$n_individuals,
+        prob = prob_inf_age[-c(1, 2)] + 1e-9,
+        log  = TRUE)
+
+       sum(ll_vals)
+    })
+
+    ll_age_inf <- sum(ll_age_inf_cohorts)
 
     ll_titre <- sapply(1:2, \(cohort_idx) {
 
@@ -305,7 +358,7 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
     ll
   })
 
-  #cat("\n Log lik: ", -mean(ll_vals))
+  # cat("\n Log lik: ", -mean(ll_vals))
 
   # Compute mean log-likelihood and MCSE
   mean_ll <- -mean(ll_vals)            # negative log-likelihood
@@ -354,10 +407,30 @@ get_loglik <- function()
 
 get_loglik_2 <- function(ds)
 {
+  if(ds == "two_datasets")
+  {
+    par_names <- c("lambda_1",
+                   "lambda_2",
+                   "rho" ,
+                   "log_A0" ,
+                   "phi" ,
+                   "sd")
 
-  fldr <- str_glue("./saved_objects/inference/two_datasets/MLE")
+  }
 
-  files <- list.files(path = fldr, pattern = "^opt")
+  if(ds == "alternative")
+  {
+    par_names <- c("lambda_1",
+                   "lambda_2",
+                   "log_A0" ,
+                   "phi" ,
+                   "sd")
+  }
+
+
+  fldr <- str_glue("./saved_objects/inference/{ds}/MLE")
+
+  files <- list.files(path = fldr, pattern = "^opt_")
 
   sol_df <- map_df(files, \(fn) {
 
@@ -371,14 +444,9 @@ get_loglik_2 <- function(ds)
 
     if(status == 5) return (NULL)
 
-    names(sol) <- c("lambda_1",
-                    "lambda_2",
-                    "rho" ,
-                    "log_A0" ,
-                    "phi" ,
-                    "sd")
+    names(sol) <- par_names
 
-    for (nm in names(inverse_link_funs))
+    for (nm in names(sol))
     {
       sol[[nm]] <- inverse_link_funs[[nm]](sol[[nm]])
     }
@@ -400,7 +468,7 @@ link_pars <- function(param_obj)
   param_obj
 }
 
-get_decay_rate <- function() 0.3 * exp(-0.5*(0:3))
+get_decay_rate <- function() 0.2 * exp(-0.5*(0:3))
 
 source("./R_scripts/inference_data.R")
 source("./R_scripts/inference_profile.R")

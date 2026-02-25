@@ -11,7 +11,9 @@ library(readr)
 library(stringr)
 library(tidyr)
 
+source("./R_scripts/DGP.R")
 source("./R_scripts/inference.R")
+
 
 data_obj <- get_inference_data()
 
@@ -19,20 +21,12 @@ age_inf_data_list <- data_obj$age_inf_data_list
 titre_data_list   <- data_obj$titre_data_list
 final_age_vctr    <- data_obj$final_age_vctr
 #-------------------------------------------------------------------------------
-args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 1) {
-  stop("Usage: Rscript cluster_MLE.R <param>")
-}
-
-ds <- args[1]
-
-start_list <- get_starting_points(ds)
+start_list <- get_starting_points("alternative")
 
 plan(multisession, workers = availableCores())
 
-res_list <- find_MLE(start_list, age_inf_data_list,
-                     final_age_vctr, n_indiv = 1e4,
-                     ds = ds)
-
-plan(sequential)
+res_list <- find_MLE_2(start_list, titre_data_list,
+                       age_inf_data_list, final_age_vctr,
+                       n_indiv = 1e4,
+                       ds = "alternative")

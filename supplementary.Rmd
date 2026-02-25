@@ -1,7 +1,6 @@
 ---
 title: "Supplementary"
 author: "Jair Andrade"
-date: "2026-01-30"
 output: html_document
 ---
 
@@ -20,58 +19,80 @@ library(tidyr)
 
 source("./R_scripts/cohort_utils.R")
 source("./R_scripts/follow_up.R")
+source("./R_scripts/KFCS.R")
 source("./R_scripts/NMC.R")
 source("./R_scripts/plots.R")
 ```
 
-# S1
+# S1 - All pairs
 
 ```{r S1_chunk}
 plot_S1()
 
-ggsave("./plots/suppl/S1.png")
-```
-
-# S2
-
-```{r S2_chunk, fig.height = 4, fig.width = 4}
-plot_S2()
-
-ggsave("./plots/suppl/S2.png")
+ggsave("./plots/suppl/S1.png", width = 5, height = 3)
 ```
 
 
-# S3
 
-```{r S3_chunk}
-plot_S3()
+# S3 - OAS
 
-ggsave("./plots/suppl/S3.png")
+```{r S3_chunk, fig.height = 4, fig.width = 4}
+plot_list <- plot_S3_S4()
+
+plot_list[[1]]
+
+ggsave("./plots/suppl/S3.png", height = 4, width = 4)
 ```
 
-# S4
+# S4 - OAS Seronegatives
 
-```{r S4_chunk}
-plot_S4()
+```{r S4_chunk, fig.height = 4, fig.width = 4}
+plot_list[[2]]
 
-ggsave("./plots/suppl/S4.png")
+ggsave("./plots/suppl/S4.png", height = 4, width = 4)
 ```
 
-# S5
+# S5 - Correlation PRNT vs HAI
 
 ```{r S5_chunk}
 plot_S5()
 
-ggsave("./plots/suppl/S5.png")
+ggsave("./plots/suppl/S5.png", width = 5, height = 3)
 ```
 
-# S6
+# S6 - Distribution of rises
 
 ```{r S6_chunk}
 plot_S6()
 
-ggsave("./plots/suppl/S6.png")
+ggsave("./plots/suppl/S6.png", height = 3, width = 3)
 ```
+
+# S7 - Sensitivity on decay rates by serotype
+
+```{r S7_chunk}
+plot_S7()
+
+ggsave("./plots/suppl/S7.png", height = 3, width = 5)
+```
+
+# S8 - Sensitivity on threshold
+
+```{r S8_chunk}
+plot_S8()
+
+ggsave("./plots/suppl/S8.png", width = 5, height = 3)
+```
+
+# S9 - Imputing on titers below LOD
+
+```{r S9_chunk}
+plot_S9()
+
+ggsave("./plots/suppl/S9.png", width = 5, height = 3)
+```
+
+
 
 
 

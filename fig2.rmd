@@ -1,7 +1,6 @@
 ---
 title: "Data analysis"
 author: "Jair Andrade"
-date: "2025-09-22"
 output: html_document
 ---
 
@@ -29,6 +28,8 @@ source("./R_scripts/KFCS.R")
 source("./R_scripts/inference.R")
 source("./R_scripts/NMC.R")
 source("./R_scripts/plots.R")
+
+cohort_lvls <- c("NMC", "CPC", "KFCS")
 ```
 
 # Fig 2A
@@ -371,7 +372,11 @@ hl1  <- 1 / fit1$coefficients # half-life
 fit2 <- lm(mean ~ 0 + bin_delta, data = NMC_mean_estimates)
 hl2  <- 1 / fit2$coefficients
 
-mean_estimates <- bind_rows(KFCS_mean_estimates, NMC_mean_estimates)
+mean_estimates <- bind_rows(KFCS_mean_estimates, NMC_mean_estimates) |> 
+  # for plotting purposes
+  complete(bin_delta, 
+  cohort = factor(cohort_lvls, levels = cohort_lvls),
+  fill   = list(mean = NA)) 
 
 fig_2D <- plot_2D(mean_estimates)
 ggsave("./plots/2D.png", width = 2.5, height = 2.5)
@@ -381,20 +386,9 @@ fig_2D
 ## Fig 2E
 
 ```{r}
-KFCS_decay <- KFCS_get_infection_df() |> 
-  filter(
-    !is_inf,
-    log_mean_end_DEN > log(5),
-    log_mean_start_DEN > log(5)) |> 
-  mutate(titre_diff = log_mean_end_DEN - log_mean_start_DEN,
-         time_diff  = as.numeric(end_interval - start_interval) / 365.25,
-         slope      = titre_diff / time_diff)|> 
-  rename(age = age_round) |> 
-  filter(age  >= 2,
-         between(time_diff, 0.9, 2))
+KFCS_decay_df <- KFCS_get_decay_rates()
 
-
-ages <- KFCS_decay |> 
+ages <- KFCS_decay_df |> 
   filter(age <= 76) |> 
   pull(age) |> unique() |>
   sort()
@@ -404,7 +398,7 @@ max_age <- ages[length(ages) - 1]
 
 moving_avg <- sapply(min_age:max_age, function(a) {
   
-  window_values <- KFCS_decay |> 
+  window_values <- KFCS_decay_df |> 
     filter(age %in% (a-1):(a + 1)) |>  
     pull(slope)
   
@@ -423,32 +417,57 @@ KFCS_decay_moving_avg_df <- data.frame(
     lower = MA - 1.96 * SE,
     upper = MA + 1.96 * SE) |> 
   mutate(cohort = "KFCS")
+
+KFCS_mean_decay_less_10 <- KFCS_decay_df |> filter(age <= 10) |>
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean()
+
+KFCS_mean_decay_20_30 <- KFCS_decay_df |> filter(age > 20,
+                                              age < 30) |>   
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean()
+
+KFCS_mean_decay_over_40 <- KFCS_decay_df |> filter(age > 40) |> pull(slope) |> 
+  mean()
+
+df40_ind <- KFCS_decay_df  |> 
+  filter(age >= 40) |> 
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop")
+
+m  <- mean(df40_ind$decay_rate)
+se <- sd(df40_ind$decay_rate) / sqrt(nrow(df40_ind))
+
+KFCS_decay_estimates_above_40 <- c(mean  = m,
+                                   lower = m - 1.96 * se,
+                                   upper = m + 1.96 * se) |> round(2)
 ```
 
 ```{r}
-df_list <- split(infection_df, infection_df$inf_id)
+decay_df <- NMC_get_decay_rates()
 
-df_list <- unname(df_list)
+NMC_mean_decay_less_10 <- decay_df |> filter(age <= 10) |>   
+  group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean()
 
-decay_df <- imap_dfr(df_list, \(df, i) {
-  
-  df <- filter_short_term_dynamics(df, plac_inf)
-  
-  if(nrow(df) <= 1) return(NULL)
-  
-  df |>
-    mutate(prev_log_mean  = lag(log_mean),
-           prev_log_mean  = ifelse(prev_log_mean == log(5), NA, prev_log_mean),
-           log_mean       = ifelse(log_mean == log(5), NA, log_mean),
-           titre_diff     = log_mean - prev_log_mean,
-           time_diff      = (days_bleed - lag(days_bleed)) / 365,
-           slope          = titre_diff / time_diff) |> 
-  filter(!is.na(slope),  between(time_diff, 0.9, 2))
-})
-```
-
-```{r}
-mean_decay_less_10 <- decay_df |> filter(age <= 10) |> pull(slope) |> mean()
+mean_decay_over_20 <- decay_df |> filter(age > 20) |> 
+    group_by(subjectNo) |> 
+  summarise(
+    decay_rate = mean(slope, na.rm = TRUE),
+    .groups = "drop") |> 
+  pull(decay_rate) |> mean() |> 
+  round(2)
 
 ages <- decay_df$age |> unique() |> sort()
 
@@ -478,7 +497,8 @@ NMC_decay_moving_avg_df <- data.frame(
 
 cohorts_decay_df <- NMC_decay_moving_avg_df |> 
   mutate(cohort = "NMC") |> 
-  bind_rows(KFCS_decay_moving_avg_df)
+  bind_rows(KFCS_decay_moving_avg_df) |> 
+  bind_rows(data.frame(age = NA, cohort = "CPC")) # for plotting purposes
 
 sim_decay_rate <- readRDS("./saved_objects/inference/two_datasets/pred_avg_decay.rds")
 
@@ -488,6 +508,8 @@ ggsave("./plots/2E.png", width = 2.5, height = 2.5)
 
 fig_2E
 ```
+
+
 
 # Fig 2F
 
@@ -570,7 +592,11 @@ fig_2F
 
 
 ```{r, fig.width  = 10, fig.height = 6}
-fig2 <- ((fig_2A | fig_2B | fig_2C) / (fig_2D | fig_2E | fig_2F)) + 
+fig_2D_to_2F <- (fig_2D | fig_2E | fig_2F) +
+    plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+fig2 <- ((fig_2A | fig_2B | fig_2C) / fig_2D_to_2F) + 
   plot_annotation(tag_levels = 'A')
 
 ggsave(plot = fig2, "./plots/fig2.pdf", width = 10, height = 6,

@@ -10,7 +10,7 @@
 #SBATCH --error=MLE_%A.err
 #SBATCH -p sapphire
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=100
+#SBATCH --cpus-per-task=110
 #SBATCH --mem=64G
 #SBATCH --ntasks=1
 #! How much wallclock time will be required?
@@ -22,4 +22,4 @@ echo "Job ID: $SLURM_JOB_ID"
 echo "CPUs: $SLURM_CPUS_PER_TASK"
 
 # run the script
-Rscript cluster_MLE.R
+Rscript cluster_MLE.R "$1"

@@ -37,16 +37,21 @@ clr_PHL_dgm <- "#C7CEAC"
 # Fig 3A
 
 ```{r}
-rho_hat    <- 0.008
-lambda_PHL <- 0.09
-lambda_THA <- 0.06
+MLE_obj <- readRDS("./saved_objects/inference/two_datasets/MLE.rds")
+
+rho_hat    <- MLE_obj$rho
+lambda_PHL <- MLE_obj$lambda_2
+lambda_THA <- MLE_obj$lambda_1
+
+# Competing hypothesis (no reinfection)
+alternative_MLE <- readRDS("./saved_objects/inference/alternative/MLE/MLE.rds")
 
 scenarios_inf_dyn <- list(
   list(scenario = 1, daily_lambda = lambda_PHL, daily_rho = rho_hat, 
        decay_rate_pattern = "Variable"),
-  list(scenario = 2, daily_lambda = lambda_PHL, daily_rho = 0,
-       decay_rate_pattern = "Variable"),
-  list(scenario = 3, daily_lambda = lambda_THA, daily_rho = rho_hat,
+  list(scenario  = 2, daily_lambda = alternative_MLE$lambda_2,
+       daily_rho = 0, decay_rate_pattern = "Variable"),
+  list(scenario  = 3, daily_lambda = lambda_THA, daily_rho = rho_hat,
        decay_rate_pattern = "Variable"))
 
 sim_list <- imap(scenarios_inf_dyn, \(sce_obj, i) {
@@ -85,6 +90,7 @@ inf_prob_age_df <- imap_dfr(sim_list, \(obj, sce_lbl) {
 ```
 
 ```{r}
+# What percentage of individuals have had homotypic reinfection before age a?
 sapply(c(20, 40, 60), \(age_cutoff) {
   n_ind_hmt_reinf <- sim_list[[1]]$inf_df |> lazy_dt() |> 
   filter(age <= age_cutoff) |> 
@@ -102,14 +108,14 @@ n_ind_hmt_reinf / n_ind
 
 ```{r plot3A}
 sce_names <- c(
-  "lambda*' = 9%, '*rho*' = 0.8%'",
-  "lambda*' = 9%, '*rho*' = 0.0%'",
-  "lambda*' = 6%, '*rho*' = 0.8%'")
+  "CPC (Reinfection)",
+  "CPC (lifelong immunity)",
+  "KFCS (Reinfection)")
 
 text_df <- data.frame(sce_id = 1:3,
                       label  = sce_names,
-                      x      = 55,
-                      y      = c(0.2, 0.12, 0.16))
+                      x      = c(65, 25, 65),
+                      y      = c(0.1, 0.01, 0.035))
 
 fig3A <- plot_3A(inf_prob_age_df, text_df,
                  c(clr_PHL, clr_PHL_dgm, clr_THA),
@@ -132,9 +138,17 @@ avg_titres_df <- imap_dfr(sim_list, \(obj, i) {
   inf_times_list <- split(inf_df$age,
                           factor(inf_df$subject_id, levels = ids))
   
-  MLE_obj <- readRDS("./saved_objects/inference/two_datasets/MLE.rds") |> 
-    as.list()
-
+  if(i != 2)
+  {
+    MLE_obj <- readRDS("./saved_objects/inference/two_datasets/MLE.rds") |> 
+      as.list()
+  }
+  
+  if(i == 2)
+  {
+    MLE_obj <- alternative_MLE
+  }
+  
   avg_titre_vctr <- estimate_avg_titre_by_age(
     log_first_peak = MLE_obj$log_A0,
     decay_rate     = get_decay_rate(),
@@ -216,7 +230,7 @@ count_df <- do.call(rbind, out)
 
 ```{r}
 gc()
-sce_name <- "lambda*' = 9%, '*rho*' = 0.8%'"
+sce_name <- "CPC (Reinfection)"
 fig3D <- plot_3D(count_df, n_ind, sce_name)
 
 fig3D
@@ -230,7 +244,7 @@ ggsave(plot = fig3, "./plots/fig3.pdf", width = 10, height = 6,
        create.dir = TRUE)
 
 ggsave(plot = fig3, "./plots/fig3.png", width = 10, height = 6,
-       create.dir = TRUE)
+       create.dir = TRUE, dpi = 1200)
 
 fig3 
 ```

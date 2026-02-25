@@ -1,3 +1,5 @@
+cohort_clrs <- c("CPC" = CPC_clr, "NMC" = NMC_all, "KFCS" = KFCS_clr)
+
 plot_2A <- function(df)
 {
   ggplot(df, aes(collected_date, log2_mean)) +
@@ -6,7 +8,7 @@ plot_2A <- function(df)
     scale_x_date(date_breaks = "3 years",
                  date_labels = "%Y") +
     geom_smooth(se = FALSE, colour = NMC_all) +
-    labs(x = "Year", y = "Titre (log2)",
+    labs(x = "Year", y = "Titer (log2)",
          subtitle = "NMC")
 }
 
@@ -17,8 +19,9 @@ plot_2B <- function(df, df2)
     labs(x     = "Baseline (log2)", y = "Rise (log2)",
          shape = NULL) +
     scale_y_continuous(limits = c(0, NA)) +
+    scale_shape_manual(values = c(2, 16)) +
     geom_line(data = df2, aes(x = baseline, y = rise), colour = "grey50") +
-    theme(legend.text = element_text(color = "grey55"),
+    theme(legend.text = element_text(color = "grey55", colour = 14),
           legend.position = c(0.4, 0.25),
           legend.direction = "vertical",
           legend.margin = margin(t = 3, r = 3, b = 3, l = 3),
@@ -32,7 +35,7 @@ plot_2C <- function(df)
     geom_line(aes(group = inf_id), colour = NMC_PCR, alpha = 0.5) +
     geom_smooth(se = FALSE, colour = NMC_PCR, linewidth = 1.5) +
     scale_y_continuous(limits = c(0, NA)) +
-    labs(x = "Years post-infection", y = "Titre (log2)")
+    labs(x = "Years post-infection", y = "Titer (log2)")
 }
 
 # df: Symptomatic and subclinical infections have been removed
@@ -43,41 +46,47 @@ plot_2D <- function(df)
 
   ggplot(df, aes(bin_delta, mean)) +
     geom_smooth(method = "lm", formula = y ~ 0 + x,
-                aes(linetype = "Detected", group = cohort, fill = cohort,
+                aes(group = cohort, fill = cohort,
                     colour = cohort),
                 alpha = 0.1,
-                fullrange = TRUE) +
+                fullrange = TRUE,
+                show.legend = FALSE) +
     geom_errorbar(aes(ymin = q2.5, ymax = q97.5, colour = cohort),
                   width = 0,
                   position = position_nudge(
-                    x = ifelse(df$cohort == "KFCS", 0.1, 0))) +
+                    x = ifelse(df$cohort == "KFCS", 0.1, 0)),
+                  show.legend = FALSE) +
     geom_point(shape = 15,
                aes(colour = cohort),
                position = position_nudge(x = ifelse(df$cohort == "KFCS",
                                                     0.1, 0)),
                size = 0.5) +
     expand_limits(x = 0, y = 0) +
-    scale_colour_manual(values = c(KFCS_clr, NMC_all)) +
+    scale_colour_manual(values = cohort_clrs) +
     labs(x = "Years between blood draws",
-         y = "Titre difference (log2)",
-         linetype = "Subclinical infections") +
+         y = "Titer difference (log2)",
+         linetype = "Subclinical infections",
+         colour = "Cohort") +
     scale_x_continuous(limits = c(0, NA)) +
-    theme(legend.position = "none")
+    guides(colour = guide_legend(override.aes = list(size = 4, shape = 16))) +
+    theme(legend.position = "bottom")
 }
 
 plot_2E <- function(df, sim_df)
 {
   ggplot(df, aes(age, MA)) +
     geom_errorbar(aes(ymin = lower, ymax = upper, colour = cohort),
-                  width = 0, alpha = 0.25) +
+                  width = 0, alpha = 0.25, show.legend = FALSE) +
     geom_point(shape = 20, aes(colour =  cohort),
-               size = 0.1, show.legend = FALSE) +
+               size = 0.1) +
     geom_line(data = sim_df, aes(y = mean_decay, group = cohort,
-                                 colour = cohort), linetype = "dashed") +
+                                 colour = cohort), linetype = "dashed",
+              show.legend = FALSE) +
     labs(x = "Age", y = "Decay rate", colour = "Cohort") +
     guides(colour = guide_legend(override.aes = list(alpha = 1))) +
     geom_hline(yintercept = 0, linetype = "dotted") +
-    scale_colour_manual(values = c("KFCS" = KFCS_clr, "NMC" = NMC_all)) +
+    scale_colour_manual(values = cohort_clrs) +
+    guides(colour = guide_legend(override.aes = list(size = 4, shape = 16))) +
     theme(legend.position  = "none",
           legend.direction = "horizontal")
 }
@@ -85,17 +94,20 @@ plot_2E <- function(df, sim_df)
 plot_2F <- function(pred_df, data_df)
 {
   ggplot(pred_df, aes(age, q50)) +
-    geom_line(linewidth = 0.5, aes(colour = cohort)) +
-    geom_ribbon(aes(ymin = q2.5, ymax = q97.5, fill = cohort), alpha = 0.5) +
+    geom_line(linewidth = 0.5, aes(colour = cohort), show.legend = FALSE) +
+    geom_ribbon(aes(ymin = q2.5, ymax = q97.5, fill = cohort), alpha = 0.5,
+                show.legend = FALSE) +
     geom_point(data = data_df, aes(y = mean, colour = cohort), shape = 1,
                size = 0.5) +
     scale_colour_manual(values = c("NMC" = NMC_all, "KFCS" = KFCS_clr,
                                    "CPC" = CPC_clr)) +
     scale_fill_manual(values = c("NMC" = NMC_all, "KFCS" = KFCS_clr,
                                    "CPC" = CPC_clr)) +
-    scale_y_continuous(limits = c(NA, 12)) +
+    scale_y_continuous(limits = c(NA, 10)) +
     scale_x_continuous(limits = c(NA, 95)) +
-    labs(x = "Age", y = "Mean titre (log2)") +
+    labs(x = "Age", y = "Mean titer (log2)",
+         colour = "Cohort") +
+    guides(colour = guide_legend(override.aes = list(size = 4, shape = 16))) +
     theme(legend.position = "none",
           strip.background = element_blank(),
           strip.text = element_blank())

@@ -39,46 +39,64 @@ NMC_get_placebo_data <- function()
 
   titre_df <- format_NMC_titre(raw_data)
 
-  titre_df  |> filter(vac_group == "Placebo") |>
-    mutate(age = round(age_cyd_inclusion + days_bleed / 365, 0))
+  seroneg_ids <- titre_df |>  group_by(subjectNo) |>
+    filter(days_bleed == min(days_bleed)) |>
+    filter(log2_mean == 0, vac_group == "Placebo") |> pull(subjectNo)
+
+  plac_df <- titre_df |> filter(vac_group == "Placebo") |>
+    mutate(age = round(age_cyd_inclusion + days_bleed / 365, 0),
+           serostatus = ifelse(subjectNo %in% seroneg_ids,
+                               "seronegative",
+                               "seropositive"))
+
+  plac_df
 }
 
 NMC_get_infection_df <- function(cut_off)
 {
-  plac_df <- NMC_get_placebo_data()
+  fp <- "./data/NMC/NMC_infection.rds"
 
-  plac_ids <- unique(plac_df$subjectNo)
+  if(!file.exists(fp))
+  {
+    plac_df <- NMC_get_placebo_data()
 
-  df_list <- split(plac_df, plac_df$subjectNo)
+    plac_ids <- unique(plac_df$subjectNo)
 
-  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
+    df_list <- split(plac_df, plac_df$subjectNo)
 
-  infection_df <- imap_dfr(df_list, \(f_df, id) {
+    plac_inf <- NMC_get_symptomatic_infections(plac_ids)
 
-    PCR_df <- plac_inf |>
-      filter(subject_no == id)
+    infection_df <- imap_dfr(df_list, \(f_df, id) {
 
-    detect_infections(f_df |> rename(titre = log2_mean),
-                      PCR_df, cutoff = cut_off) |>
-      remove_multiple_measurements_in_a_year()
-  }) |> select(subjectNo, collected_year, age, days_bleed, titre, log_mean,
-               PCR_infection, titre_infection, infection, serotype,
-               contains("log2_D")) |>
-    mutate(key = paste(subjectNo, collected_year, sep = "_"))
+      PCR_df <- plac_inf |>
+        filter(subject_no == id)
 
-  # Individuals for whom it is not possible to determine whether there was
-  # an infection during the first year because there was only one measurement
-  keys_first_year <- plac_df |> group_by(subjectNo) |>
-    filter(collected_year == min(collected_year)) |>
-    group_by(subjectNo, collected_year) |>
-    count() |> arrange(desc(n)) |> ungroup() |>
-    filter(n == 1) |>
-    mutate(key = paste(subjectNo, collected_year, sep = "_")) |>
-    pull(key)
+      detect_infections(f_df |> rename(titre = log2_mean),
+                        PCR_df, cutoff = cut_off) |>
+        remove_multiple_measurements_in_a_year()
+    }) |> select(subjectNo, serostatus, collected_year, age, days_bleed, titre,
+                 log_mean, PCR_infection, titre_infection, infection, serotype,
+                 contains("log2_D")) |>
+      mutate(key = paste(subjectNo, collected_year, sep = "_"))
 
- infection_df |>
-   mutate(is_inf = ifelse(key %in% keys_first_year,
-                          NA, infection))
+    # Individuals for whom it is not possible to determine whether there was
+    # an infection during the first year because there was only one measurement
+    keys_first_year <- plac_df |> group_by(subjectNo) |>
+      filter(collected_year == min(collected_year)) |>
+      group_by(subjectNo, collected_year) |>
+      count() |> arrange(desc(n)) |> ungroup() |>
+      filter(n == 1) |>
+      mutate(key = paste(subjectNo, collected_year, sep = "_")) |>
+      pull(key)
+
+    infection_df <- infection_df |>
+      mutate(is_inf = ifelse(key %in% keys_first_year,
+                             NA, infection))
+
+    saveRDS(infection_df, fp)
+  } else infection_df <- readRDS(fp)
+
+  infection_df
 }
 
 NMC_get_prob_inf_at_age <- function()
@@ -422,4 +440,57 @@ NMC_get_PCR_rise <- function()
              serostatus = ifelse(baseline == 0, "Seronegative", "Seropositive"))
 
   })
+}
+
+NMC_get_decay_rates <- function()
+{
+  infection_detection_df <- NMC_get_infection_df(1.18)
+
+  infection_df <- infection_detection_df |>
+    mutate(is_inf = ifelse(is.na(is_inf), 0, is_inf)) |>
+    group_by(subjectNo) |>
+    mutate(inf_idx = cumsum(is_inf),
+           inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
+    ungroup() |>
+    # Removes measurements from seronegative individuals before their first infection.
+    filter(!(serostatus == "seronegative" & inf_idx == 0))
+
+  df_list <- split(infection_df, infection_df$inf_id)
+
+  df_list <- unname(df_list)
+
+  decay_df <- imap_dfr(df_list, \(df, i) {
+
+    df <- filter_short_term_dynamics(df, plac_inf)
+
+    if(nrow(df) <= 1) return(NULL)
+
+    df |>
+      mutate(prev_log_mean  = lag(log_mean),
+             titre_diff     = log_mean - prev_log_mean,
+             time_diff      = (days_bleed - lag(days_bleed)) / 365,
+             slope          = titre_diff / time_diff) |>
+      filter(!is.na(slope),  between(time_diff, 0.9, 2))
+  })
+}
+
+NMC_get_measurements_summary <- function()
+{
+  fn <- "./data/NMC/NMC_measurements_summary.rds"
+
+  if(!file.exists(fn))
+  {
+    df <- NMC_get_placebo_data() |> select(starts_with("log2_D"))
+
+    means <- colMeans(df, na.rm = TRUE)
+    sds   <- sapply(df, sd, na.rm = TRUE)
+
+    summary_list <- list(means = means,
+                         sds   = sds)
+
+    saveRDS(summary_list, fn)
+
+  } else summary_list <- readRDS(fn)
+
+  summary_list
 }
