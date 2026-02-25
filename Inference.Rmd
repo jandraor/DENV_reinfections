@@ -42,6 +42,7 @@ final_age_vctr    <- data_obj$final_age_vctr
 
 ### MLE
 
+
 ```{r}
 start_list <- get_starting_points("one_dataset")
 
@@ -53,7 +54,9 @@ res_list <- find_MLE(start_list, age_inf_data_list,
 plan(sequential)
 ```
 
+
 ### Profile likelihood
+
 
 ```{r}
 n_indiv <- 1e4
@@ -70,8 +73,6 @@ profile_list <- vector(mode = "list", length = length(colnames))
 
 names(profile_list) <- colnames
 ```
-
-
 
 ```{r}
 param <- "lambda_1"
@@ -103,8 +104,6 @@ df                    <- format_profile_df(prof_objs, guesses_df[[param]])
 profile_list[[param]] <- df
 ```
 
-
-
 ```{r}
 param <- "lambda_2"
 #-------------------------------------------------------------------------------
@@ -133,6 +132,7 @@ prof2_objs <- construct_profile(starting_points   = sp_list,
 df                    <- format_profile_df(prof2_objs, guesses_df[[param]])
 profile_list[[param]] <- df
 ```
+
 
 ```{r}
 param <- "rho"
@@ -731,7 +731,6 @@ plot_fit <- function(pred_df, data_df, clr, sub_txt)
     scale_x_continuous(limits = c(NA, 95)) +
     labs(x = "Age", y = "Mean titre (log2)",
          subtitle = sub_txt)
-  
 }
 ```
 

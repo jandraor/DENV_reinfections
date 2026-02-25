@@ -230,7 +230,9 @@ count_df <- do.call(rbind, out)
 
 ```{r}
 gc()
+
 sce_name <- "CPC (Reinfection)"
+
 fig3D <- plot_3D(count_df, n_ind, sce_name)
 
 fig3D
