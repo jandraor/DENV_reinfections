@@ -370,12 +370,24 @@ log_lik_titre_prob_inf <- function(pars, titre_data_list, age_inf_data_list,
   mean_ll
 }
 
-get_loglik <- function()
+get_loglik <- function(ds)
 {
+  if(ds == "one_dataset")
+  {
+    param_names <- c("lambda_1",
+                     "lambda_2",
+                     "rho")
+  }
 
-  fldr <- str_glue("./saved_objects/inference/one_dataset/MLE")
+  if(ds == "one_dataset_perfect_ht_immunity")
+  {
+    param_names <- c("lambda_1",
+                     "lambda_2")
+  }
 
-  files <- list.files(path = fldr, pattern = "^opt")
+  fldr <- str_glue("./saved_objects/inference/{ds}/MLE")
+
+  files <- list.files(path = fldr, pattern = "^opt_")
 
   sol_df <- map_df(files, \(fn) {
 
@@ -388,8 +400,6 @@ get_loglik <- function()
     status <- res$status
 
     if(status == 5) return (NULL)
-
-    param_names <- c("lambda_1", "lambda_2", "rho")
 
     names(sol) <- param_names
 
@@ -467,8 +477,6 @@ link_pars <- function(param_obj)
 
   param_obj
 }
-
-get_decay_rate <- function() 0.2 * exp(-0.5*(0:3))
 
 source("./R_scripts/inference_data.R")
 source("./R_scripts/inference_profile.R")

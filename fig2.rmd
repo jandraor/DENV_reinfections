@@ -57,6 +57,8 @@ mean_titres_beg_end <- plac_df |> filter(visit_no %in% c(6, 18),
 
 fig_2A <- plot_2A(plac_df)
 fig_2A
+
+ggsave("./plots/2A.png", width = 3.3, height = 3)
 ```
 
 ```{r}
@@ -129,7 +131,7 @@ fig_2B <- plot_2B(result_df, new_df)
 
 fig_2B
 
-ggsave("./plots/2B.png", width = 2.5, height = 2.5)
+ggsave("./plots/2B.png", width = 3.3, height = 3)
 ```
 
 ```{r}
@@ -315,7 +317,7 @@ fig_2C <- plot_2C(post_inf_df)
 
 fig_2C
 
-ggsave("./plots/2C.png", width = 4, height = 2.5)
+ggsave("./plots/2C.png", width = 3.3, height = 3)
 ```
 
 #  Fig 2D

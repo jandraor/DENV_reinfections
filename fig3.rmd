@@ -26,11 +26,6 @@ source("./R_scripts/plots.R")
 ```{r}
 n_ind    <- 1e7
 stop_age <- 80
-
-# palette 22 sept 2025
-clr_PHL     <- "#8BAE80"
-clr_THA     <- "#6C7CC0"
-clr_PHL_dgm <- "#C7CEAC"
 ```
 
 

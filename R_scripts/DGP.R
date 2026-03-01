@@ -46,4 +46,4 @@ estimate_avg_titre_by_age <- function(log_first_peak, decay_rate,
   avg_titre
 }
 
-get_decay_rate <- function() 0.3 * exp(-0.5*(0:3))
+get_decay_rate <- function() 0.2 * exp(-0.5*(0:3))

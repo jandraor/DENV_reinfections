@@ -20,6 +20,11 @@ DENV_1_4    <- c("#E35A43", "#F5CE5A", "#7B92DC", "#ED47C9") # Palette 824
 untyped     <- "#383838"
 subclinical <- c("grey85")
 
+# palette 22 sept 2025
+clr_PHL     <- "#8BAE80"
+clr_THA     <- "#6C7CC0"
+clr_PHL_dgm <- "#C7CEAC" # dogma (dgm)
+
 source("./R_scripts/plots_fig1.R")
 source("./R_scripts/plots_fig2.R")
 source("./R_scripts/plots_fig3.R")

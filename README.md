@@ -1,0 +1,15 @@
+
+This repository contains code for the paper “Long-term antibody dynamics
+challenge the paradigm of life-long homotypic immunity to dengue virus”
+
+The analysis in this study can be reproduced by executing the files in
+this order:
+
+- **Inference.Rmd**
+- **fig1.Rmd**
+- **fig2.rmd**
+- **fig3.rmd**
+- **supplementary.Rmd**
+
+This analysis requires the R package
+[flavipack](https://github.com/jandraor/flavipack).

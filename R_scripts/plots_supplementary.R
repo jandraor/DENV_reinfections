@@ -470,3 +470,147 @@ plot_S9 <- function()
       legend.key.width = unit(1.5, "cm")) +
     guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
 }
+
+plot_S10 <- function()
+{
+  set.seed(1520)
+
+  n_ind          <- 1e7
+  stop_age       <- 80
+  lambda_val     <- 0.085
+
+  CPC_df <- CPC_get_tidy_data() |>
+    mutate(year = year(collection_date)) |>
+    group_by(subject_id) |>
+    filter(year == min(year)) |>
+    ungroup() |>
+    arrange(desc(age)) |>
+    select(subject_id, age) |>
+    mutate(relative_birth_year = max(age) - age)
+
+  birth_year_dist <- sample(CPC_df$relative_birth_year, n_ind, replace = TRUE)
+
+  scenarios_list <- list(
+    list(
+      id     = 1,
+      label  = "Constant FOI (Reinfection)",
+      rho    = 0.0064,
+      lambda = lambda_val),
+    list(
+      id     = 2,
+      label  = "Decreasing FOI",
+      rho    = 0,
+      lambda = pmax(2 * 0.085 - (0:161) * 0.001 , 0)),
+    list(
+      id     = 3,
+      label  = "Increasing FOI",
+      rho    = 0,
+      lambda = 0.001 +  (0:161) * 0.001),
+    list(
+      id     = 4,
+      label  = "Heterogeneous risk & constant FOI",
+      rho    = 0,
+      lambda = lambda_val,
+      r_i    = rgamma(n_ind, 5, 5)))
+
+  titre_df <- map_df(scenarios_list , \(sce_obj) {
+
+    fn <- str_glue("./saved_objects/S10/scenario_{sce_obj$id}.rds")
+
+    if(!file.exists(fn))
+    {
+      arg_list <- list(lambda_serotype = sce_obj$lambda,
+                       loss_rate       = sce_obj$rho,
+                       n_individuals   = n_ind,
+                       final_age       = stop_age)
+
+      if(length(sce_obj$lambda) > 1)
+      {
+        arg_list$birth_index <- birth_year_dist
+      }
+
+      inf_df <- do.call(simulate_DENV_infections_since_birth, arg_list)
+
+      ids <- seq_len(n_ind)
+
+      inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
+
+      inf_times_list <- split(inf_df$age,
+                              factor(inf_df$subject_id, levels = ids))
+
+      avg_titre_vctr <- estimate_avg_titre_by_age(
+        log_first_peak = 1.30,
+        decay_rate     = get_decay_rate(),
+        phi            = 5.64,
+        beta           = 1,
+        inf_times_list = inf_times_list,
+        final_age = stop_age)
+
+      saveRDS(avg_titre_vctr, fn)
+
+    } else avg_titre_vctr <- readRDS(fn)
+
+    data.frame(age = 1:80, mean_titre = avg_titre_vctr) |>
+      mutate(sce_id = sce_obj$id,
+             lbl    = sce_obj$label)
+  })
+
+  clr_PHL_alt1 <- "#AEB7C9"  # muted lavender-grey (NEW)
+  clr_PHL_alt2 <- "#6F8F8C"  # teal-grey
+  clr_PHL_alt3 <- "#B89B6B"  # warm sand
+
+  ggplot(titre_df |> filter(sce_id > 1), aes(age, mean_titre)) +
+    geom_line(aes(colour   = lbl,
+                  linetype = lbl),
+              linewidth    =  1) +
+    geom_line(data = titre_df |> filter(sce_id == 1), colour = clr_PHL,
+              linewidth    =  1.2) +
+    scale_colour_manual(values = c(clr_PHL_alt1,
+                                   clr_PHL_alt2, clr_PHL_alt3)) +
+    scale_linetype_manual(values = c("dashed", "11", "dotdash")) +
+    annotate("text", label = "Reinfection", colour = clr_PHL, x = 60, y = 4.5) +
+    scale_y_continuous(limits = c(0, NA)) +
+    guides(colour   = guide_legend(direction = "vertical")) +
+    labs(x = "Age", y = "Mean titer (log2)",
+         colour   = "Lifelong immunity",
+         linetype = "Lifelong immunity") +
+    theme(legend.position = c(0.5, 0.25),
+          legend.key.width = unit(1, "cm"))
+}
+
+plot_S11 <- function()
+{
+  age_df <- map_df(c(100, 1000, 10000, 100000), \(n_ind) {
+
+    map_df(1:10, \(iter) {
+
+      inf_df <- flavipack::simulate_DENV_infections_since_birth(
+        lambda_serotype = 0.085,
+        loss_rate = 0.0075,
+        n_individuals = n_ind,
+        final_age = 80)
+
+
+      inf_df |> group_by(age) |>
+        summarise(n_infections = n()) |>
+        mutate(pct = n_infections / n_ind,
+               .iter = iter,
+               .n_ind = format(n_ind, scientific = TRUE))
+
+    })
+  })
+
+  mean_df <- age_df |>
+    group_by(age, .n_ind) |>
+    summarise(mean_pct = mean(pct))
+
+  ggplot(age_df, aes(age, pct)) +
+    geom_line(aes(group = .iter), colour = "grey70", alpha = 0.25) +
+    geom_line(data = mean_df, aes(y = mean_pct), colour = CPC_clr) +
+    scale_y_continuous(limits = c(0, NA)) +
+    facet_wrap(
+      ~.n_ind,
+      labeller = labeller(.n_ind = function(x) paste0("N = ", scales::comma(as.numeric(x))))
+    ) +
+    labs(x = "Age", y = "Probability of infection")
+}

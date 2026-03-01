@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 library(boot)
 library(dplyr)
 library(flavipack)
+library(furrr)
 library(lubridate)
 library(purrr)
 library(readr)
@@ -18,6 +19,8 @@ library(stringr)
 library(tidyr)
 
 source("./R_scripts/cohort_utils.R")
+source("./R_scripts/CPC.R")
+source("./R_scripts/DGP.R")
 source("./R_scripts/follow_up.R")
 source("./R_scripts/KFCS.R")
 source("./R_scripts/NMC.R")
@@ -92,7 +95,21 @@ plot_S9()
 ggsave("./plots/suppl/S9.png", width = 5, height = 3)
 ```
 
+# S10 - Individual heterogeneous risk of infection
 
+```{r S10_chunk, fig.width = 5, fig.height = 3}
+plot_S10()
+
+ggsave("./plots/suppl/S10.png", width = 5, height = 3)
+```
+# S11 - Asymptotic probability of infection
+
+```{r S11_chunk, fig.width = 5, fig.height = 3}
+plot_S11()
+
+ggsave("./plots/suppl/S11.png", width = 5, height = 3)
+ggsave("./plots/suppl/S11.pdf", width = 5, height = 3)
+```
 
 
 

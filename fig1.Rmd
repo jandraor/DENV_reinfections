@@ -250,13 +250,18 @@ fig_1D_to_1F <- (fig_1D | fig_1E | fig_1F) +
 fig_1D_to_1F
 ```
 
+```{r}
+fig_1A_to_1C <- (fig_1A | fig_1B | fig_1C) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        plot.subtitle = element_blank())
+
+ggsave(plot = fig_1A_to_1C, "./plots/fig1A_C.pdf", width = 10, height = 3,
+       create.dir = TRUE)
+```
 
 
 ```{r, fig.width = 10, fig.height = 6}
-fig_1A_to_1C <- (fig_1A | fig_1B | fig_1C) +
-  plot_layout(guides = "collect") &
-  theme(legend.position = "bottom")
-
 fig1 <- (fig_1A_to_1C / fig_1D_to_1F) +
   plot_annotation(tag_levels = 'A')
 

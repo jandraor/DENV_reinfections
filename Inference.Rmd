@@ -44,12 +44,14 @@ final_age_vctr    <- data_obj$final_age_vctr
 
 
 ```{r}
-start_list <- get_starting_points("one_dataset")
+ds <- "one_dataset"
+start_list <- get_starting_points(ds)
 
 plan(multisession, workers = availableCores())
 
 res_list <- find_MLE(start_list, age_inf_data_list, 
-                     final_age_vctr, n_indiv = 1e4)
+                     final_age_vctr, n_indiv = 1e4,
+                     ds = ds)
 
 plan(sequential)
 ```
@@ -61,7 +63,7 @@ plan(sequential)
 ```{r}
 n_indiv <- 1e4
 
-ll_df   <- get_loglik()
+ll_df   <- get_loglik("one_dataset")
 
 box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
 
@@ -169,6 +171,11 @@ db_df <- do.call(rbind, profile_list) |> bind_rows(ll_df)
 L_max        <- db_df |> filter(ll == max(ll)) |> pull(ll)
 alpha        <- 0.05
 cutoff_value <- L_max - 0.5 * qchisq(1 - alpha, df = 1)
+
+AIC_1 <- data.frame(model  = "Reinfection",
+                    ll     = L_max,
+                    n_pars = 3) |> 
+  mutate(AIC = 2 * n_pars - 2 * ll)
 ```
 
 ```{r}
@@ -301,12 +308,31 @@ start_list <- get_starting_points(ds)
 
 plan(multisession, workers = availableCores())
 
-res_list <- find_MLE(start_list[1:2], age_inf_data_list, 
+res_list <- find_MLE(start_list, age_inf_data_list, 
                      final_age_vctr, n_indiv = 1e4,
                      ds = ds)
 
 plan(sequential)
 ```
+
+```{r}
+MLE_df <- get_loglik("one_dataset_perfect_ht_immunity") |> 
+  filter(ll == max(ll))
+
+AIC_2 <- data.frame(model  = "perfect_immunity",
+                    ll     = MLE_df$ll,
+                    n_pars = 2) |> 
+  mutate(AIC = 2 * n_pars - 2 * ll)
+```
+
+
+## Model comparison
+
+```{r}
+AIC_df <- bind_rows(AIC_1, AIC_2) |> 
+  mutate(delta_AIC = AIC - min(AIC))
+```
+
 
 
 # Two datasets
