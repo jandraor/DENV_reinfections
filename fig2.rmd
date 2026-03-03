@@ -381,7 +381,7 @@ mean_estimates <- bind_rows(KFCS_mean_estimates, NMC_mean_estimates) |>
   fill   = list(mean = NA)) 
 
 fig_2D <- plot_2D(mean_estimates)
-ggsave("./plots/2D.png", width = 2.5, height = 2.5)
+ggsave("./plots/2D.png", width = 3.3, height = 3)
 fig_2D
 ```
 
@@ -420,56 +420,25 @@ KFCS_decay_moving_avg_df <- data.frame(
     upper = MA + 1.96 * SE) |> 
   mutate(cohort = "KFCS")
 
-KFCS_mean_decay_less_10 <- KFCS_decay_df |> filter(age <= 10) |>
-  group_by(subjectNo) |> 
-  summarise(
-    decay_rate = mean(slope, na.rm = TRUE),
-    .groups = "drop") |> 
-  pull(decay_rate) |> mean()
+KFCS_mean_decay_less_10 <- KFCS_decay_df |> filter(age < 10)
+KFCS_estimates_less_10  <- calculate_rate_summary(KFCS_mean_decay_less_10)
+  
+KFCS_mean_decay_20_30 <- KFCS_decay_df |> filter(age > 20, age < 30)
+KFCS_estimates_20_30  <- calculate_rate_summary(KFCS_mean_decay_20_30)
 
-KFCS_mean_decay_20_30 <- KFCS_decay_df |> filter(age > 20,
-                                              age < 30) |>   
-  group_by(subjectNo) |> 
-  summarise(
-    decay_rate = mean(slope, na.rm = TRUE),
-    .groups = "drop") |> 
-  pull(decay_rate) |> mean()
-
-KFCS_mean_decay_over_40 <- KFCS_decay_df |> filter(age > 40) |> pull(slope) |> 
-  mean()
-
-df40_ind <- KFCS_decay_df  |> 
-  filter(age >= 40) |> 
-  group_by(subjectNo) |> 
-  summarise(
-    decay_rate = mean(slope, na.rm = TRUE),
-    .groups = "drop")
-
-m  <- mean(df40_ind$decay_rate)
-se <- sd(df40_ind$decay_rate) / sqrt(nrow(df40_ind))
-
-KFCS_decay_estimates_above_40 <- c(mean  = m,
-                                   lower = m - 1.96 * se,
-                                   upper = m + 1.96 * se) |> round(2)
+KFCS_mean_decay_over_40 <- KFCS_decay_df |> filter(age > 40) 
+KFCS_estimates_over_40  <- calculate_rate_summary(KFCS_mean_decay_over_40)
 ```
 
 ```{r}
 decay_df <- NMC_get_decay_rates()
 
-NMC_mean_decay_less_10 <- decay_df |> filter(age <= 10) |>   
-  group_by(subjectNo) |> 
-  summarise(
-    decay_rate = mean(slope, na.rm = TRUE),
-    .groups = "drop") |> 
-  pull(decay_rate) |> mean()
+NMC_mean_decay_less_10 <- decay_df |> filter(age < 10)
+NMC_estimates_less_10  <- calculate_rate_summary(NMC_mean_decay_less_10)
 
-mean_decay_over_20 <- decay_df |> filter(age > 20) |> 
-    group_by(subjectNo) |> 
-  summarise(
-    decay_rate = mean(slope, na.rm = TRUE),
-    .groups = "drop") |> 
-  pull(decay_rate) |> mean() |> 
-  round(2)
+# the oldest person is less than 30 
+NMC_mean_decay_over_20 <- decay_df |> filter(age > 20) 
+NMC_estimates_over_20  <- calculate_rate_summary(NMC_mean_decay_over_20)
 
 ages <- decay_df$age |> unique() |> sort()
 

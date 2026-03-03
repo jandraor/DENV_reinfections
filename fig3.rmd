@@ -116,6 +116,8 @@ fig3A <- plot_3A(inf_prob_age_df, text_df,
                  c(clr_PHL, clr_PHL_dgm, clr_THA),
                  c("solid","11", "solid"))
 fig3A
+
+ggsave("./plots/fig3A.pdf", width = 5, height = 3)
 ```
 
 
@@ -164,6 +166,8 @@ fig3B <- plot_3B(avg_titres_df,
                  c("solid","11", "solid"))
 
 fig3B
+
+ggsave("./plots/fig3B.pdf", width = 5, height = 3)
 ```
 
 
@@ -194,6 +198,8 @@ fig3C <- plot_3C(cum_inf_df,
                  c(clr_PHL, clr_PHL_dgm, clr_THA),
                  c("solid","11", "solid"))
 fig3C
+
+ggsave("./plots/fig3C.pdf", width = 5, height = 3)
 ```
 
 ```{r}
@@ -223,7 +229,7 @@ for(a in age_span)
 count_df <- do.call(rbind, out)
 ```
 
-```{r}
+```{r, fig.width = 3.3, fig.height = 3}
 gc()
 
 sce_name <- "CPC (Reinfection)"
@@ -231,6 +237,8 @@ sce_name <- "CPC (Reinfection)"
 fig3D <- plot_3D(count_df, n_ind, sce_name)
 
 fig3D
+
+ggsave("./plots/fig3D.pdf", width = 5, height = 3)
 ```
 
 ```{r, fig.width  = 10, fig.height = 6}

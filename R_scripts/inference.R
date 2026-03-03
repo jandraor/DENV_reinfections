@@ -174,8 +174,6 @@ get_starting_points <- function(ds)
                 "phi"      = 10,
                 "sd"       = 10),
       nseq =  500)
-
-    stop("No valid dataset ('ds') was provided", call. = FALSE)
   }
 
   par_names <- colnames(start_df)

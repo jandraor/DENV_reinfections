@@ -139,3 +139,19 @@ wald_rr <- function(a, n, a_ref, n_ref, alpha = 0.05)
 
   list(RR = rr, lower = lower, upper = upper)
 }
+
+calculate_rate_summary <- function(df)
+{
+  mean_rate_by_subject <- df |>
+    group_by(subjectNo) |>
+    summarise(
+      decay_rate = mean(slope, na.rm = TRUE),
+      .groups = "drop")
+
+  m  <- mean(mean_rate_by_subject$decay_rate)
+  se <- sd(mean_rate_by_subject$decay_rate) / sqrt(nrow(mean_rate_by_subject))
+
+  list(mean  = round(m, 2),
+       lower = round(m + 1.96 * se, 2),
+       upper = round(m - 1.96 * se, 2))
+}

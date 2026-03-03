@@ -35,73 +35,72 @@ plot_S1()
 ggsave("./plots/suppl/S1.png", width = 5, height = 3)
 ```
 
+# S3 - Correlation PRNT vs HAI
 
+```{r S3_chunk}
+plot_S3()
 
-# S3 - OAS
-
-```{r S3_chunk, fig.height = 4, fig.width = 4}
-plot_list <- plot_S3_S4()
-
-plot_list[[1]]
-
-ggsave("./plots/suppl/S3.png", height = 4, width = 4)
+ggsave("./plots/suppl/S3.png", width = 5, height = 3)
 ```
 
-# S4 - OAS Seronegatives
+# S4 - Distribution of rises
 
-```{r S4_chunk, fig.height = 4, fig.width = 4}
-plot_list[[2]]
+```{r S4_chunk}
+plot_S4()
 
-ggsave("./plots/suppl/S4.png", height = 4, width = 4)
+ggsave("./plots/suppl/S4.png", height = 3, width = 3)
 ```
 
-# S5 - Correlation PRNT vs HAI
+# S5 - Sensitivity on decay rates by serotype
 
 ```{r S5_chunk}
 plot_S5()
 
-ggsave("./plots/suppl/S5.png", width = 5, height = 3)
+ggsave("./plots/suppl/S5.png", height = 3, width = 5)
 ```
 
-# S6 - Distribution of rises
+# S6 - Sensitivity on threshold
 
 ```{r S6_chunk}
 plot_S6()
 
-ggsave("./plots/suppl/S6.png", height = 3, width = 3)
+ggsave("./plots/suppl/S6.png", width = 5, height = 3)
 ```
 
-# S7 - Sensitivity on decay rates by serotype
+# S7 - Imputing on titers below LOD
 
 ```{r S7_chunk}
 plot_S7()
 
-ggsave("./plots/suppl/S7.png", height = 3, width = 5)
+ggsave("./plots/suppl/S7.png", width = 5, height = 3)
 ```
 
-# S8 - Sensitivity on threshold
+# S8 - Individual heterogeneous risk of infection
 
-```{r S8_chunk}
+```{r S8_chunk, fig.width = 5, fig.height = 3}
 plot_S8()
 
 ggsave("./plots/suppl/S8.png", width = 5, height = 3)
 ```
 
-# S9 - Imputing on titers below LOD
+# S9 - OAS
 
-```{r S9_chunk}
-plot_S9()
+```{r S9_chunk, fig.height = 4, fig.width = 4}
+plot_list <- plot_S9_S10()
 
-ggsave("./plots/suppl/S9.png", width = 5, height = 3)
+plot_list[[1]]
+
+ggsave("./plots/suppl/S9.png", height = 4, width = 4)
 ```
 
-# S10 - Individual heterogeneous risk of infection
+# S10- OAS Seronegatives
 
-```{r S10_chunk, fig.width = 5, fig.height = 3}
-plot_S10()
+```{r S10_chunk, fig.height = 4, fig.width = 4}
+plot_list[[2]]
 
-ggsave("./plots/suppl/S10.png", width = 5, height = 3)
+ggsave("./plots/suppl/S10.png", height = 4, width = 4)
 ```
+
 # S11 - Asymptotic probability of infection
 
 ```{r S11_chunk, fig.width = 5, fig.height = 3}

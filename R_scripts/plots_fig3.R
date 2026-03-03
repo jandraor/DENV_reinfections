@@ -53,8 +53,8 @@ plot_3D <- function(df, n_ind, sce_name)
     summarise(frac = sum(count) / n_ind,
               .groups = "drop")
 
-  label_df <- data.frame(x = c(4, 9.5, 15, 22, 33, 46, 57, 65, 71, 77),
-                         y = c(0.95, 0.85, 0.75, 0.65, 0.55, 0.43, 0.33, 0.22, 0.13, 0.05),
+  label_df <- data.frame(x = c(4, 8.5, 13, 20, 30, 42, 53, 61, 68, 76),
+                         y = c(0.95, 0.85, 0.75, 0.65, 0.55, 0.43, 0.33, 0.22, 0.14, 0.07),
                          label = unique(frac_df$bin_inf))
 
   my_colours <- c("grey85", viridis(10))

@@ -38,7 +38,387 @@ plot_S1 <- function()
           legend.position.inside = c(0.8,0.8))
 }
 
-plot_S3_S4 <- function()
+plot_S3 <- function()
+{
+
+  raw <- read_excel("./data/NMC/NMC Laboratory testing result to Henrik 23JUNE23.xlsx")
+
+  Bleeds <- colnames(raw) |>
+    grep(pattern = '^BL', value = T) |>
+    str_extract('^BL[0-9A-Z\\-]+') |>
+    unique()
+
+
+  processTiters = function(x) {
+    mult = str_extract(x, '>|<')
+    ifelse( is.na(mult)
+            , 1
+            , c('<' = 1/2, '>' = 2)[mult]
+    ) *
+      as.numeric(gsub('^[^0-9]', '', x))
+  }
+
+  dat <-
+    Bleeds |>
+    lapply(function(bleed_name){
+      out <-
+        raw |>
+        select(starts_with(bleed_name)) |>
+        rename_all(function(x) gsub(paste0('^',bleed_name,' '), '', x)) |>
+        pivot_longer(cols = c(-No,-CollectionDate),names_to = "assay", values_to = "titer") |>
+        mutate(
+          CollectionDate = as.Date(CollectionDate)
+          , virus = str_extract(assay, '^[A-Z1-4]+')
+          , assay = str_extract(assay, '[A-Z]+$')
+          , titer = processTiters(titer)
+        )
+      out = split(out, out$assay)
+      inner_join(out$HAI, out$PRNT,
+                 by = c('No', 'virus', 'CollectionDate'),
+                 suffix = c('.hai', '.prnt'))
+    })
+
+
+  # GMT across DENV titres
+  dat.gmt <-
+    dat |>
+    lapply(function(x) {
+      x |>
+        filter(grepl('^D[1-4]', virus)) |>
+        group_by(No) |>
+        summarise(
+          logGMT.hai  = mean(1 + log2(titer.hai / 10)),
+          logGMT.prnt = mean(1 + log2(titer.prnt / 10)))
+    }) |> do.call(what = rbind)
+
+  # fit linear model to translate PRNT to HAI
+  fit <- glm(logGMT.hai ~ logGMT.prnt, data = dat.gmt)
+  summary(fit)
+
+  cor.test(dat.gmt$logGMT.hai, dat.gmt$logGMT.prnt, method = 'pearson')
+
+  dat.gmt |>
+    ggplot(aes(x = logGMT.prnt, y = logGMT.hai)) +
+    geom_point(size = 1, shape = 1, alpha = 0.2, colour = NMC_all) +
+    geom_smooth(method = 'lm', colour = NMC_all, fill = NMC_all) +
+    coord_fixed(ratio = 1) +
+    # actual means
+    geom_pointrange(data =
+                      dat.gmt |>
+                      mutate(
+                        prntBucket = cut(logGMT.prnt,
+                                         breaks = c(-Inf,0:10,Inf))) |>
+                      group_by(prntBucket) |>
+                      summarise(
+                        N        = n(),
+                        avg.prnt = mean(logGMT.prnt),
+                        avg.hai  = mean(logGMT.hai),
+                        sd.prnt  = sd(logGMT.prnt),
+                        sd.hai   = sd(logGMT.hai)),
+                    aes(x = avg.prnt, y = avg.hai,
+                        ymin = avg.hai - 1.96 * sd.hai / sqrt(N),
+                        ymax = avg.hai + 1.96 * sd.hai / sqrt(N)),
+                    alpha = 0.5, colour = NMC_all) +
+    labs(
+      x = expression(PRNT~(log[2]^"*")),
+      y = expression(HAI~(log[2]^"*")))
+}
+
+plot_S4 <- function()
+{
+  rise_df <- NMC_get_PCR_rise()
+
+  ggplot(rise_df, aes(rise)) +
+    geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
+    scale_x_continuous(n.breaks = 6) +
+    labs(y = "Frequency",
+         x = expression("Rise in titers (" * log[2]^"*" * " scale)"))
+}
+
+
+plot_S5 <- function()
+{
+  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
+
+  plac_ids <- unique(infection_detection_df$subjectNo)
+
+  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
+
+  infection_df <- infection_detection_df |>
+    mutate(is_inf = ifelse(is.na(is_inf), 0, is_inf)) |>
+    group_by(subjectNo) |>
+    mutate(inf_idx = cumsum(is_inf),
+           inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
+    ungroup()
+
+  df_list <- split(infection_df, infection_df$inf_id)
+
+  delta_df <- map_df(df_list, \(df) {
+
+    df <- filter_short_term_dynamics(df, plac_inf, 365)
+
+    if(nrow(df) <= 1) return(NULL)
+
+    pairwise_delta_by_serotype(df)
+  }) |> mutate(delta_year = delta_time / 365,
+               bin_delta  = round(delta_year, 0)) |>
+    select(inf_id, contains("delta"), -delta_time, -delta_year) |>
+    pivot_longer(c(-inf_id, -bin_delta),
+                 values_to = "delta_titre",
+                 names_to = "serotype") |>
+    mutate(serotype = str_replace(serotype, "delta_titre_D", "DENV")) |>
+    filter(!is.na(delta_titre))
+
+  df_list <- split(delta_df, delta_df$serotype)
+
+  delta_summary_df <- map_df(df_list, \(df) {
+
+    summary_df <- df |> add_bootstrap_CI() |>
+      mutate(serotype = unique(df$serotype)) |>
+      filter(n > 30)
+
+    fit <- lm(mean ~ 0 + bin_delta, data = summary_df)
+
+    slope <- fit$coefficients[[1]]
+
+    summary_df <- summary_df |> mutate(slope = round(slope, 2))
+  })
+
+  ggplot(delta_summary_df, aes(bin_delta, mean)) +
+    geom_smooth(method = "lm", formula = y ~ 0 + x,
+                aes(group = serotype, fill = serotype, colour = serotype),
+                fullrange = TRUE,
+                se = FALSE) +
+    geom_errorbar(aes(ymin = q2.5, ymax = q97.5, x = bin_delta,
+                      colour = serotype),
+                  width = 0) +
+    geom_point(aes(colour = serotype, x = bin_delta, y = mean),
+               shape = 15, size = 2) +
+    expand_limits(x = 0, y = 0) +
+    scale_x_continuous(limits = c(0, 8)) +
+    scale_y_continuous(limits = c(-2, NA)) +
+    scale_colour_manual(values = c("DENV1" = DENV_1_4[[1]],
+                                   "DENV2" = DENV_1_4[[2]],
+                                   "DENV3" = DENV_1_4[[3]],
+                                   "DENV4" = DENV_1_4[[4]])) +
+    scale_fill_manual(values = c("DENV1" = DENV_1_4[[1]],
+                                 "DENV2" = DENV_1_4[[2]],
+                                 "DENV3" = DENV_1_4[[3]],
+                                 "DENV4" = DENV_1_4[[4]])) +
+    labs(x = "Years between blood draws",
+         y = expression("Titer difference (" * log[2]^"*" * ")"),
+         fill   = "",
+         colour = "") +
+    theme(legend.position = "inside",
+          legend.position.inside = c(0.35, 0.35))
+}
+
+
+plot_S6 <- function()
+{
+  sens_df <- map_df(c(1, 1.18, 1.5), \(cutoff) {
+
+    mean_df <- NMC_get_binned_decay(cutoff) |>
+      mutate(cutoff_val = as.factor(cutoff))
+
+    mean_df
+  }) |> filter(n > 30)
+
+  df_list <- split(sens_df, sens_df$cutoff_val)
+
+  slope_df <- imap_dfr(df_list, \(df, co) {
+
+    fit <- lm(mean ~ 0 + bin_delta, data = df)
+
+    ci <- confint(fit, level = 0.95)
+
+    data.frame(
+      cut_off = co,
+      slope   = coef(fit)[["bin_delta"]],
+      lower   = ci["bin_delta", 1],
+      upper = ci["bin_delta", 2])
+  })
+
+  ggplot(sens_df, aes(bin_delta, mean)) +
+    geom_smooth(method = "lm", formula = y ~ 0 + x,
+                aes(group = cutoff_val, linetype = cutoff_val),
+                colour = NMC_all,
+                fullrange = TRUE, se  = FALSE) +
+    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+    expand_limits(x = 0, y = 0) +
+    labs(x = "Years between blood draws",
+         y = expression("Titer difference (" * log[2]^"*" * ")"),
+         linetype = "Cutoff") +
+    scale_x_continuous(limits = c(0, NA)) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.3, 0.3),
+      legend.key.width = unit(1.5, "cm")) +
+    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
+
+}
+
+plot_S7 <- function()
+{
+  df <- map_df(c(2, 5, 8), \(imputed_val) {
+
+    KFCS_infection_detection_df <- KFCS_get_infection_df(imputed_val)
+
+    KFCS_infection_df <- KFCS_infection_detection_df |>
+      group_by(subjectNo) |>
+      arrange(subjectNo, start_interval) |>
+      mutate(inf_idx = cumsum(is_inf),
+             inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
+      ungroup()
+
+    df_list <- split(KFCS_infection_df, KFCS_infection_df$inf_id)
+
+    KFCS_delta_df <- map_df(df_list, KFCS_estimate_deltas) |>
+      mutate(bin_delta    = round(delta_time, 0))
+
+    KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI() |>
+      mutate(cohort = "KFCS",
+             imputed_val = as.factor(imputed_val)) |>
+      filter(bin_delta > 0)
+
+    fit <- lm(mean ~ 0 + bin_delta, data = KFCS_mean_estimates)
+    print(fit)
+
+    print(round(confint(fit), 2))
+
+    KFCS_mean_estimates
+  })
+
+  ggplot(df, aes(bin_delta, mean)) +
+    geom_smooth(method = "lm", formula = y ~ 0 + x,
+                aes(group = imputed_val,
+                    linetype = imputed_val),
+                alpha = 0.1,
+                fullrange = TRUE,
+                se = FALSE,
+                colour = KFCS_clr) +
+    expand_limits(x = 0, y = 0) +
+    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
+    labs(x = "Years between blood draws",
+         y = expression("Titer difference (" * log[2]^"*" * ")"),
+         linetype = "Imputed value") +
+    scale_x_continuous(limits = c(0, NA)) +
+    theme(
+      legend.position = "inside",
+      legend.position.inside = c(0.3, 0.3),
+      legend.key.width = unit(1.5, "cm")) +
+    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
+}
+
+
+plot_S8 <- function()
+{
+  set.seed(1520)
+
+  n_ind          <- 1e7
+  stop_age       <- 80
+  lambda_val     <- 0.085
+
+  CPC_df <- CPC_get_tidy_data() |>
+    mutate(year = year(collection_date)) |>
+    group_by(subject_id) |>
+    filter(year == min(year)) |>
+    ungroup() |>
+    arrange(desc(age)) |>
+    select(subject_id, age) |>
+    mutate(relative_birth_year = max(age) - age)
+
+  birth_year_dist <- sample(CPC_df$relative_birth_year, n_ind, replace = TRUE)
+
+  scenarios_list <- list(
+    list(
+      id     = 1,
+      label  = "Constant FOI (Reinfection)",
+      rho    = 0.0064,
+      lambda = lambda_val),
+    list(
+      id     = 2,
+      label  = "Decreasing FOI",
+      rho    = 0,
+      lambda = pmax(2 * 0.085 - (0:161) * 0.001 , 0)),
+    list(
+      id     = 3,
+      label  = "Increasing FOI",
+      rho    = 0,
+      lambda = 0.001 +  (0:161) * 0.001),
+    list(
+      id     = 4,
+      label  = "Heterogeneous risk & constant FOI",
+      rho    = 0,
+      lambda = lambda_val,
+      r_i    = rgamma(n_ind, 5, 5)))
+
+  titre_df <- map_df(scenarios_list , \(sce_obj) {
+
+    fn <- str_glue("./saved_objects/S10/scenario_{sce_obj$id}.rds")
+
+    if(!file.exists(fn))
+    {
+      arg_list <- list(lambda_serotype = sce_obj$lambda,
+                       loss_rate       = sce_obj$rho,
+                       n_individuals   = n_ind,
+                       final_age       = stop_age)
+
+      if(length(sce_obj$lambda) > 1)
+      {
+        arg_list$birth_index <- birth_year_dist
+      }
+
+      inf_df <- do.call(simulate_DENV_infections_since_birth, arg_list)
+
+      ids <- seq_len(n_ind)
+
+      inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
+
+      inf_times_list <- split(inf_df$age,
+                              factor(inf_df$subject_id, levels = ids))
+
+      avg_titre_vctr <- estimate_avg_titre_by_age(
+        log_first_peak = 1.30,
+        decay_rate     = get_decay_rate(),
+        phi            = 5.64,
+        beta           = 1,
+        inf_times_list = inf_times_list,
+        final_age = stop_age)
+
+      saveRDS(avg_titre_vctr, fn)
+
+    } else avg_titre_vctr <- readRDS(fn)
+
+    data.frame(age = 1:80, mean_titre = avg_titre_vctr) |>
+      mutate(sce_id = sce_obj$id,
+             lbl    = sce_obj$label)
+  })
+
+  clr_PHL_alt1 <- "#AEB7C9"  # muted lavender-grey (NEW)
+  clr_PHL_alt2 <- "#6F8F8C"  # teal-grey
+  clr_PHL_alt3 <- "#B89B6B"  # warm sand
+
+  ggplot(titre_df |> filter(sce_id > 1), aes(age, mean_titre)) +
+    geom_line(aes(colour   = lbl,
+                  linetype = lbl),
+              linewidth    =  1) +
+    geom_line(data = titre_df |> filter(sce_id == 1), colour = clr_PHL,
+              linewidth    =  1.2) +
+    scale_colour_manual(values = c(clr_PHL_alt1,
+                                   clr_PHL_alt2, clr_PHL_alt3)) +
+    scale_linetype_manual(values = c("dashed", "11", "dotdash")) +
+    annotate("text", label = "Reinfection", colour = clr_PHL, x = 60, y = 4.5) +
+    scale_y_continuous(limits = c(0, NA)) +
+    guides(colour   = guide_legend(direction = "vertical")) +
+    labs(x = "Age", y = "Mean titer (log2)",
+         colour   = "Lifelong immunity",
+         linetype = "Lifelong immunity") +
+    theme(legend.position = c(0.5, 0.25),
+          legend.key.width = unit(1, "cm"))
+}
+
+plot_S9_S10 <- function()
 {
   summary_list <- NMC_get_measurements_summary()
 
@@ -199,383 +579,6 @@ plot_S3_S4 <- function()
 
   list(S2 = g_S2,
        S3 = g_S3)
-}
-
-plot_S5 <- function()
-{
-
-  raw <- read_excel("./data/NMC/NMC Laboratory testing result to Henrik 23JUNE23.xlsx")
-
-  Bleeds <- colnames(raw) |>
-    grep(pattern = '^BL', value = T) |>
-    str_extract('^BL[0-9A-Z\\-]+') |>
-    unique()
-
-
-  processTiters = function(x) {
-    mult = str_extract(x, '>|<')
-    ifelse( is.na(mult)
-            , 1
-            , c('<' = 1/2, '>' = 2)[mult]
-    ) *
-      as.numeric(gsub('^[^0-9]', '', x))
-  }
-
-  dat <-
-    Bleeds |>
-    lapply(function(bleed_name){
-      out <-
-        raw |>
-        select(starts_with(bleed_name)) |>
-        rename_all(function(x) gsub(paste0('^',bleed_name,' '), '', x)) |>
-        pivot_longer(cols = c(-No,-CollectionDate),names_to = "assay", values_to = "titer") |>
-        mutate(
-          CollectionDate = as.Date(CollectionDate)
-          , virus = str_extract(assay, '^[A-Z1-4]+')
-          , assay = str_extract(assay, '[A-Z]+$')
-          , titer = processTiters(titer)
-        )
-      out = split(out, out$assay)
-      inner_join(out$HAI, out$PRNT,
-                 by = c('No', 'virus', 'CollectionDate'),
-                 suffix = c('.hai', '.prnt'))
-    })
-
-
-  # GMT across DENV titres
-  dat.gmt <-
-    dat |>
-    lapply(function(x) {
-      x |>
-        filter(grepl('^D[1-4]', virus)) |>
-        group_by(No) |>
-        summarise(
-          logGMT.hai  = mean(1 + log2(titer.hai / 10)),
-          logGMT.prnt = mean(1 + log2(titer.prnt / 10)))
-    }) |> do.call(what = rbind)
-
-  # fit linear model to translate PRNT to HAI
-  fit <- glm(logGMT.hai ~ logGMT.prnt, data = dat.gmt)
-  summary(fit)
-
-  cor.test(dat.gmt$logGMT.hai, dat.gmt$logGMT.prnt, method = 'pearson')
-
-  dat.gmt |>
-    ggplot(aes(x = logGMT.prnt, y = logGMT.hai)) +
-    geom_point(size = 1, shape = 1, alpha = 0.2, colour = NMC_all) +
-    geom_smooth(method = 'lm', colour = NMC_all, fill = NMC_all) +
-    coord_fixed(ratio = 1) +
-    # actual means
-    geom_pointrange(data =
-                      dat.gmt |>
-                      mutate(
-                        prntBucket = cut(logGMT.prnt,
-                                         breaks = c(-Inf,0:10,Inf))) |>
-                      group_by(prntBucket) |>
-                      summarise(
-                        N        = n(),
-                        avg.prnt = mean(logGMT.prnt),
-                        avg.hai  = mean(logGMT.hai),
-                        sd.prnt  = sd(logGMT.prnt),
-                        sd.hai   = sd(logGMT.hai)),
-                    aes(x = avg.prnt, y = avg.hai,
-                        ymin = avg.hai - 1.96 * sd.hai / sqrt(N),
-                        ymax = avg.hai + 1.96 * sd.hai / sqrt(N)),
-                    alpha = 0.5, colour = NMC_all) +
-    labs(
-      x = expression(PRNT~(log[2]^"*")),
-      y = expression(HAI~(log[2]^"*")))
-}
-
-plot_S6 <- function()
-{
-  rise_df <- NMC_get_PCR_rise()
-
-  ggplot(rise_df, aes(rise)) +
-    geom_histogram(colour = "white",binwidth = 1, fill = NMC_PCR) +
-    scale_x_continuous(n.breaks = 6) +
-    labs(y = "Frequency",
-         x = expression("Rise in titers (" * log[2]^"*" * " scale)"))
-}
-
-plot_S7 <- function()
-{
-  infection_detection_df <- NMC_get_infection_df(cut_off = 1.18)
-
-  plac_ids <- unique(infection_detection_df$subjectNo)
-
-  plac_inf <- NMC_get_symptomatic_infections(plac_ids)
-
-  infection_df <- infection_detection_df |>
-    mutate(is_inf = ifelse(is.na(is_inf), 0, is_inf)) |>
-    group_by(subjectNo) |>
-    mutate(inf_idx = cumsum(is_inf),
-           inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
-    ungroup()
-
-  df_list <- split(infection_df, infection_df$inf_id)
-
-  delta_df <- map_df(df_list, \(df) {
-
-    df <- filter_short_term_dynamics(df, plac_inf, 365)
-
-    if(nrow(df) <= 1) return(NULL)
-
-    pairwise_delta_by_serotype(df)
-  }) |> mutate(delta_year = delta_time / 365,
-               bin_delta  = round(delta_year, 0)) |>
-    select(inf_id, contains("delta"), -delta_time, -delta_year) |>
-    pivot_longer(c(-inf_id, -bin_delta),
-                 values_to = "delta_titre",
-                 names_to = "serotype") |>
-    mutate(serotype = str_replace(serotype, "delta_titre_D", "DENV")) |>
-    filter(!is.na(delta_titre))
-
-  df_list <- split(delta_df, delta_df$serotype)
-
-  delta_summary_df <- map_df(df_list, \(df) {
-
-    summary_df <- df |> add_bootstrap_CI() |>
-      mutate(serotype = unique(df$serotype)) |>
-      filter(n > 30)
-
-    fit <- lm(mean ~ 0 + bin_delta, data = summary_df)
-
-    slope <- fit$coefficients[[1]]
-
-    summary_df <- summary_df |> mutate(slope = round(slope, 2))
-  })
-
-  ggplot(delta_summary_df, aes(bin_delta, mean)) +
-    geom_smooth(method = "lm", formula = y ~ 0 + x,
-                aes(group = serotype, fill = serotype, colour = serotype),
-                fullrange = TRUE,
-                se = FALSE) +
-    geom_errorbar(aes(ymin = q2.5, ymax = q97.5, x = bin_delta,
-                      colour = serotype),
-                  width = 0) +
-    geom_point(aes(colour = serotype, x = bin_delta, y = mean),
-               shape = 15, size = 2) +
-    expand_limits(x = 0, y = 0) +
-    scale_x_continuous(limits = c(0, 8)) +
-    scale_y_continuous(limits = c(-2, NA)) +
-    scale_colour_manual(values = c("DENV1" = DENV_1_4[[1]],
-                                   "DENV2" = DENV_1_4[[2]],
-                                   "DENV3" = DENV_1_4[[3]],
-                                   "DENV4" = DENV_1_4[[4]])) +
-    scale_fill_manual(values = c("DENV1" = DENV_1_4[[1]],
-                                 "DENV2" = DENV_1_4[[2]],
-                                 "DENV3" = DENV_1_4[[3]],
-                                 "DENV4" = DENV_1_4[[4]])) +
-    labs(x = "Years between blood draws",
-         y = expression("Titer difference (" * log[2]^"*" * ")"),
-         fill   = "",
-         colour = "") +
-    theme(legend.position = "inside",
-          legend.position.inside = c(0.35, 0.35))
-}
-
-plot_S8 <- function()
-{
-  sens_df <- map_df(c(1, 1.18, 1.5), \(cutoff) {
-
-    mean_df <- NMC_get_binned_decay(cutoff) |>
-      mutate(cutoff_val = as.factor(cutoff))
-
-    mean_df
-  }) |> filter(n > 30)
-
-  df_list <- split(sens_df, sens_df$cutoff_val)
-
-  slope_df <- imap_dfr(df_list, \(df, co) {
-
-    fit <- lm(mean ~ 0 + bin_delta, data = df)
-
-    ci <- confint(fit, level = 0.95)
-
-    data.frame(
-      cut_off = co,
-      slope   = coef(fit)[["bin_delta"]],
-      lower   = ci["bin_delta", 1],
-      upper = ci["bin_delta", 2])
-  })
-
-  ggplot(sens_df, aes(bin_delta, mean)) +
-    geom_smooth(method = "lm", formula = y ~ 0 + x,
-                aes(group = cutoff_val, linetype = cutoff_val),
-                colour = NMC_all,
-                fullrange = TRUE, se  = FALSE) +
-    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
-    expand_limits(x = 0, y = 0) +
-    labs(x = "Years between blood draws",
-         y = expression("Titer difference (" * log[2]^"*" * ")"),
-         linetype = "Cutoff") +
-    scale_x_continuous(limits = c(0, NA)) +
-    theme(
-      legend.position = "inside",
-      legend.position.inside = c(0.3, 0.3),
-      legend.key.width = unit(1.5, "cm")) +
-    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
-
-}
-
-plot_S9 <- function()
-{
-  df <- map_df(c(2, 5, 8), \(imputed_val) {
-
-    KFCS_infection_detection_df <- KFCS_get_infection_df(imputed_val)
-
-    KFCS_infection_df <- KFCS_infection_detection_df |>
-      group_by(subjectNo) |>
-      arrange(subjectNo, start_interval) |>
-      mutate(inf_idx = cumsum(is_inf),
-             inf_id  = paste(subjectNo, inf_idx, sep = "_")) |>
-      ungroup()
-
-    df_list <- split(KFCS_infection_df, KFCS_infection_df$inf_id)
-
-    KFCS_delta_df <- map_df(df_list, KFCS_estimate_deltas) |>
-      mutate(bin_delta    = round(delta_time, 0))
-
-    KFCS_mean_estimates <- KFCS_delta_df |> add_bootstrap_CI() |>
-      mutate(cohort = "KFCS",
-             imputed_val = as.factor(imputed_val)) |>
-      filter(bin_delta > 0)
-
-    fit <- lm(mean ~ 0 + bin_delta, data = KFCS_mean_estimates)
-    print(fit)
-
-    print(round(confint(fit), 2))
-
-    KFCS_mean_estimates
-  })
-
-  ggplot(df, aes(bin_delta, mean)) +
-    geom_smooth(method = "lm", formula = y ~ 0 + x,
-                aes(group = imputed_val,
-                    linetype = imputed_val),
-                alpha = 0.1,
-                fullrange = TRUE,
-                se = FALSE,
-                colour = KFCS_clr) +
-    expand_limits(x = 0, y = 0) +
-    scale_linetype_manual(values = c("dotted", "solid", "dashed")) +
-    labs(x = "Years between blood draws",
-         y = expression("Titer difference (" * log[2]^"*" * ")"),
-         linetype = "Imputed value") +
-    scale_x_continuous(limits = c(0, NA)) +
-    theme(
-      legend.position = "inside",
-      legend.position.inside = c(0.3, 0.3),
-      legend.key.width = unit(1.5, "cm")) +
-    guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
-}
-
-plot_S10 <- function()
-{
-  set.seed(1520)
-
-  n_ind          <- 1e7
-  stop_age       <- 80
-  lambda_val     <- 0.085
-
-  CPC_df <- CPC_get_tidy_data() |>
-    mutate(year = year(collection_date)) |>
-    group_by(subject_id) |>
-    filter(year == min(year)) |>
-    ungroup() |>
-    arrange(desc(age)) |>
-    select(subject_id, age) |>
-    mutate(relative_birth_year = max(age) - age)
-
-  birth_year_dist <- sample(CPC_df$relative_birth_year, n_ind, replace = TRUE)
-
-  scenarios_list <- list(
-    list(
-      id     = 1,
-      label  = "Constant FOI (Reinfection)",
-      rho    = 0.0064,
-      lambda = lambda_val),
-    list(
-      id     = 2,
-      label  = "Decreasing FOI",
-      rho    = 0,
-      lambda = pmax(2 * 0.085 - (0:161) * 0.001 , 0)),
-    list(
-      id     = 3,
-      label  = "Increasing FOI",
-      rho    = 0,
-      lambda = 0.001 +  (0:161) * 0.001),
-    list(
-      id     = 4,
-      label  = "Heterogeneous risk & constant FOI",
-      rho    = 0,
-      lambda = lambda_val,
-      r_i    = rgamma(n_ind, 5, 5)))
-
-  titre_df <- map_df(scenarios_list , \(sce_obj) {
-
-    fn <- str_glue("./saved_objects/S10/scenario_{sce_obj$id}.rds")
-
-    if(!file.exists(fn))
-    {
-      arg_list <- list(lambda_serotype = sce_obj$lambda,
-                       loss_rate       = sce_obj$rho,
-                       n_individuals   = n_ind,
-                       final_age       = stop_age)
-
-      if(length(sce_obj$lambda) > 1)
-      {
-        arg_list$birth_index <- birth_year_dist
-      }
-
-      inf_df <- do.call(simulate_DENV_infections_since_birth, arg_list)
-
-      ids <- seq_len(n_ind)
-
-      inf_df <- inf_df[order(inf_df$subject_id, inf_df$age), ]
-
-      inf_times_list <- split(inf_df$age,
-                              factor(inf_df$subject_id, levels = ids))
-
-      avg_titre_vctr <- estimate_avg_titre_by_age(
-        log_first_peak = 1.30,
-        decay_rate     = get_decay_rate(),
-        phi            = 5.64,
-        beta           = 1,
-        inf_times_list = inf_times_list,
-        final_age = stop_age)
-
-      saveRDS(avg_titre_vctr, fn)
-
-    } else avg_titre_vctr <- readRDS(fn)
-
-    data.frame(age = 1:80, mean_titre = avg_titre_vctr) |>
-      mutate(sce_id = sce_obj$id,
-             lbl    = sce_obj$label)
-  })
-
-  clr_PHL_alt1 <- "#AEB7C9"  # muted lavender-grey (NEW)
-  clr_PHL_alt2 <- "#6F8F8C"  # teal-grey
-  clr_PHL_alt3 <- "#B89B6B"  # warm sand
-
-  ggplot(titre_df |> filter(sce_id > 1), aes(age, mean_titre)) +
-    geom_line(aes(colour   = lbl,
-                  linetype = lbl),
-              linewidth    =  1) +
-    geom_line(data = titre_df |> filter(sce_id == 1), colour = clr_PHL,
-              linewidth    =  1.2) +
-    scale_colour_manual(values = c(clr_PHL_alt1,
-                                   clr_PHL_alt2, clr_PHL_alt3)) +
-    scale_linetype_manual(values = c("dashed", "11", "dotdash")) +
-    annotate("text", label = "Reinfection", colour = clr_PHL, x = 60, y = 4.5) +
-    scale_y_continuous(limits = c(0, NA)) +
-    guides(colour   = guide_legend(direction = "vertical")) +
-    labs(x = "Age", y = "Mean titer (log2)",
-         colour   = "Lifelong immunity",
-         linetype = "Lifelong immunity") +
-    theme(legend.position = c(0.5, 0.25),
-          legend.key.width = unit(1, "cm"))
 }
 
 plot_S11 <- function()
