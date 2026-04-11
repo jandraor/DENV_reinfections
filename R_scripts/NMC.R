@@ -54,7 +54,7 @@ NMC_get_placebo_data <- function()
 
 NMC_get_infection_df <- function(cut_off)
 {
-  fp <- "./data/NMC/NMC_infection.rds"
+  fp <- str_glue("./data/NMC/NMC_infection_{cut_off}.rds")
 
   if(!file.exists(fp))
   {

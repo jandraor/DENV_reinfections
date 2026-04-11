@@ -65,13 +65,13 @@ profile_fun_2 <- function(estimated_pars, titre_data_list, age_inf_data_list,
 }
 
 optimise_over_fixed_value_2 <- function(starting_point, id, titre_data_list,
-                                      age_inf_data_list, final_age_vctr,
-                                      fixed_pos, n_indiv)
+                                        age_inf_data_list, final_age_vctr,
+                                        fixed_pos, n_indiv, ds)
 {
   set.seed(1742)
   seed_vec <- sample.int(1e7, 10)
 
-  fn <- str_glue("./saved_objects/inference/two_datasets/profile_{fixed_pos}/iter_{id}.rds")
+  fn <- str_glue("./saved_objects/inference/{ds}/profile_{fixed_pos}/iter_{id}.rds")
 
   if(!file.exists(fn))
   {
@@ -105,6 +105,7 @@ optimise_over_fixed_value_2 <- function(starting_point, id, titre_data_list,
                   ftol_rel    = 1e-10,
                   print_level = 0))
 
+    dir.create(dirname(fn), recursive = TRUE, showWarnings = FALSE)
     saveRDS(res, fn)
 
   } else res <- readRDS(fn)
@@ -136,7 +137,21 @@ construct_profile <- function(starting_points, fixed_pos, titre_data_list,
       age_inf_data_list = age_inf_data_list,
       final_age_vctr    = final_age_vctr,
       fixed_pos         = fixed_pos,
-      n_indiv           = n_indiv)
+      n_indiv           = n_indiv,
+      ds                = ds)
+  }
+
+  if(ds == "alternative")
+  {
+    profile_res <- future_imap(
+      starting_points,
+      optimise_over_fixed_value_2,
+      titre_data_list   = titre_data_list,
+      age_inf_data_list = age_inf_data_list,
+      final_age_vctr    = final_age_vctr,
+      fixed_pos         = fixed_pos,
+      n_indiv           = n_indiv,
+      ds                = ds)
   }
 
   profile_res
