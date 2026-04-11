@@ -75,8 +75,9 @@ optimise_over_fixed_value_2 <- function(starting_point, id, titre_data_list,
 
   if(!file.exists(fn))
   {
+    fixed_name    <- names(starting_point)[[fixed_pos]]
     fixed_val     <- starting_point[[fixed_pos]]
-    unc_fixed_val <- link_funs[[fixed_pos]](fixed_val)
+    unc_fixed_val <- link_funs[[fixed_name]](fixed_val)
 
     starting_point[[fixed_pos]] <- NULL
 
