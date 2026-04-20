@@ -267,6 +267,9 @@ fig1 <- (fig_1A_to_1C / fig_1D_to_1F) +
 
 ggsave(plot = fig1, "./plots/fig1.png", width = 10, height = 6,
        create.dir = TRUE)
+
+ggsave(plot = fig1, "./plots/fig1.pdf", width = 10, height = 6,
+       create.dir = TRUE)
 fig1
 ```
 

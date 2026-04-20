@@ -1,7 +1,11 @@
 ---
 title: "Supplementary"
-author: "Jair Andrade"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      smooth_scroll: FALSE
+    number_sections: false
 ---
 
 ```{r setup, include=FALSE}
@@ -67,7 +71,7 @@ plot_S6()
 ggsave("./plots/suppl/S6.png", width = 5, height = 3)
 ```
 
-# S7 - Imputing on titers below LOD
+# S7 - Imputing on titres below LOD
 
 ```{r S7_chunk}
 plot_S7()
@@ -75,39 +79,49 @@ plot_S7()
 ggsave("./plots/suppl/S7.png", width = 5, height = 3)
 ```
 
-# S8 - Individual heterogeneous risk of infection
+# S8 - Alternative scenarios (infection patterns)
 
 ```{r S8_chunk, fig.width = 5, fig.height = 3}
-plot_S8()
+plot_list_S8_S9 <- plot_S8_S9()
+
+plot_list_S8_S9[[1]]
 
 ggsave("./plots/suppl/S8.png", width = 5, height = 3)
 ```
 
-# S9 - OAS
+# S9 - Alternative scenarios (population titres)
 
-```{r S9_chunk, fig.height = 4, fig.width = 4}
-plot_list <- plot_S9_S10()
+```{r S9_chunk, fig.width = 5, fig.height = 3}
+plot_list_S8_S9[[2]]
+
+ggsave("./plots/suppl/S9.png", width = 5, height = 3)
+```
+
+# S10 - OAS
+
+```{r S10_chunk, fig.height = 4, fig.width = 4}
+plot_list <- plot_S10_S11()
 
 plot_list[[1]]
 
 ggsave("./plots/suppl/S9.png", height = 4, width = 4)
 ```
 
-# S10- OAS Seronegatives
+# S11- OAS Seronegatives
 
-```{r S10_chunk, fig.height = 4, fig.width = 4}
+```{r S11_chunk, fig.height = 4, fig.width = 4}
 plot_list[[2]]
 
 ggsave("./plots/suppl/S10.png", height = 4, width = 4)
 ```
 
-# S11 - Asymptotic probability of infection
+# S12 - Asymptotic probability of infection
 
-```{r S11_chunk, fig.width = 5, fig.height = 3}
-plot_S11()
+```{r S12_chunk, fig.width = 5, fig.height = 3}
+plot_S12()
 
-ggsave("./plots/suppl/S11.png", width = 5, height = 3)
-ggsave("./plots/suppl/S11.pdf", width = 5, height = 3)
+ggsave("./plots/suppl/S12.png", width = 5, height = 3)
+ggsave("./plots/suppl/S12.pdf", width = 5, height = 3)
 ```
 
 

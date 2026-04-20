@@ -334,7 +334,6 @@ AIC_df <- bind_rows(AIC_1, AIC_2) |>
 ```
 
 
-
 # Two datasets
 
 
@@ -869,6 +868,159 @@ alternative_MLE <- alternative_db |> filter(ll == max(ll)) |>
   as.list()
 
 saveRDS(alternative_MLE,"./saved_objects/inference/alternative/MLE/MLE.rds")
+```
+
+## Profile likelihood
+
+```{r}
+n_indiv <- 1e4
+
+ll_df   <- get_loglik_2("alternative")
+
+box <- ll_df |> filter(ll > max(ll)- 20) |> sapply(range)
+
+plan(multisession, workers = availableCores())
+
+colnames <- c("lambda_1", "lambda_2", "log_A0", "phi", "sd")
+
+profile_list <- vector(mode = "list", length = length(colnames))
+
+names(profile_list) <- colnames
+```
+
+```{r}
+param <- "lambda_1"
+#-------------------------------------------------------------------------------
+result_obj <- 
+  alternative_profile(
+    param,
+    titre_data_list,
+    age_inf_data_list,
+    final_age_vctr,
+    n_indiv,
+    box,
+    computation = "sequential")
+#-------------------------------------------------------------------------------
+profile_list[[param]] <- format_profile_df(result_obj$prof_objs, 
+                                           result_obj$grid_values)
+```
+
+```{r}
+param <- "lambda_2"
+#-------------------------------------------------------------------------------
+result_obj <- 
+  alternative_profile(
+    param,
+    titre_data_list,
+    age_inf_data_list,
+    final_age_vctr,
+    n_indiv,
+    box,
+    computation = "sequential")
+#-------------------------------------------------------------------------------
+profile_list[[param]] <- format_profile_df(result_obj$prof_objs, 
+                                           result_obj$grid_values)
+```
+
+```{r}
+param <- "log_A0"
+#-------------------------------------------------------------------------------
+result_obj <- 
+  alternative_profile(
+    param,
+    titre_data_list,
+    age_inf_data_list,
+    final_age_vctr,
+    n_indiv,
+    box,
+    computation = "sequential")
+#-------------------------------------------------------------------------------
+profile_list[[param]] <- format_profile_df(result_obj$prof_objs, 
+                                           result_obj$grid_values)
+```
+
+```{r}
+param <- "phi"
+#-------------------------------------------------------------------------------
+result_obj <- 
+  alternative_profile(
+    param,
+    titre_data_list,
+    age_inf_data_list,
+    final_age_vctr,
+    n_indiv,
+    box,
+    computation = "sequential")
+#-------------------------------------------------------------------------------
+profile_list[[param]] <- format_profile_df(result_obj$prof_objs, 
+                                           result_obj$grid_values)
+```
+
+```{r}
+param <- "sd"
+#-------------------------------------------------------------------------------
+result_obj <- 
+  alternative_profile(
+    param,
+    titre_data_list,
+    age_inf_data_list,
+    final_age_vctr,
+    n_indiv,
+    box,
+    computation = "sequential")
+#-------------------------------------------------------------------------------
+profile_list[[param]] <- format_profile_df(result_obj$prof_objs, 
+                                           result_obj$grid_values)
+```
+
+```{r}
+db_df <- do.call(rbind, profile_list) |> 
+  bind_rows(ll_df)
+
+max_df       <- db_df |> filter(ll == max(ll)) 
+L_max        <- max_df |> pull(ll)
+alpha        <- 0.05
+cutoff_value <- L_max - 0.5 * qchisq(1 - alpha, df = 1)
+```
+
+
+```{r}
+plot_options_list <- list(list(x_pos  = 0.039,
+                               lbl    = "lambda[1]",
+                               digits = 4),
+                          list(x_pos = 0.06,
+                               lbl   = "lambda[2]",
+                               digits = 4),
+                          list(x_pos = 1.8,
+                               lbl   = "logA0",
+                               digits = 2),
+                          list(x_pos = 6.8,
+                               lbl   = "phi",
+                               digits = 2),
+                          list(x_pos = 2.4,
+                               lbl   = "sigma",
+                               digits = 2))
+
+p_list <- purrr::map(seq_len(length(plot_options_list)), \(i) {
+  
+  p_options <- plot_options_list[[i]]
+  
+  param_df   <- profile_list[[i]]
+  param_name <- colnames[[i]]
+  
+  ci_df <- param_df |> filter(ll >= cutoff_value)
+  
+  ci_vals <- ci_df[[param_name]] |> range() |> round(p_options$digits)
+  
+  plot_profile(param_df |> 
+               rename(value = all_of(param_name)),
+               cutoff_value, p_options$x_pos, -735, ci_vals, p_options$lbl)
+})
+```
+
+```{r, fig.width = 7, fig.height = 7}
+(p_list[[1]] | p_list[[2]] | p_list[[3]]) /
+ (p_list[[4]] | p_list[[5]]) 
 ```
 
 

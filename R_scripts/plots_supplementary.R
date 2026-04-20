@@ -249,7 +249,8 @@ plot_S6 <- function()
     labs(x = "Years between blood draws",
          y = expression("Titer difference (" * log[2]^"*" * ")"),
          linetype = "Cutoff") +
-    scale_x_continuous(limits = c(0, NA)) +
+    scale_x_continuous(limits = c(0, 8), breaks = seq(0, 8, 2)) +
+    scale_y_continuous(breaks = c(-1.0, -0.5, 0)) +
     theme(
       legend.position = "inside",
       legend.position.inside = c(0.3, 0.3),
@@ -311,7 +312,7 @@ plot_S7 <- function()
 }
 
 
-plot_S8 <- function()
+plot_S8_S9 <- function()
 {
   set.seed(1520)
 
@@ -328,6 +329,7 @@ plot_S8 <- function()
     select(subject_id, age) |>
     mutate(relative_birth_year = max(age) - age)
 
+  # for time-varying FOI
   birth_year_dist <- sample(CPC_df$relative_birth_year, n_ind, replace = TRUE)
 
   scenarios_list <- list(
@@ -351,11 +353,16 @@ plot_S8 <- function()
       label  = "Heterogeneous risk & constant FOI",
       rho    = 0,
       lambda = lambda_val,
-      r_i    = rgamma(n_ind, 5, 5)))
+      r_i    = rgamma(n_ind, 5, 5)),
+    list(
+      id     = 5,
+      label  = "Homogeneous risk & constant FOI",
+      rho    = 0,
+      lambda = lambda_val))
 
-  titre_df <- map_df(scenarios_list , \(sce_obj) {
+  result_list <- lapply(scenarios_list , \(sce_obj) {
 
-    fn <- str_glue("./saved_objects/S10/scenario_{sce_obj$id}.rds")
+    fn <- str_glue("./saved_objects/S8_9/scenario_{sce_obj$id}.rds")
 
     if(!file.exists(fn))
     {
@@ -369,7 +376,20 @@ plot_S8 <- function()
         arg_list$birth_index <- birth_year_dist
       }
 
+      if (!is.null(sce_obj$r_i))
+      {
+        arg_list$r_i <- sce_obj$r_i
+      }
+
       inf_df <- do.call(simulate_DENV_infections_since_birth, arg_list)
+
+      pct_inf_age <- inf_df |> group_by(age) |>
+        summarise(n_inf = n()) |>
+        mutate(n_individuals = n_ind,
+               pct           = n_inf / n_individuals,
+               sce_id        = sce_obj$id,
+               lbl           = sce_obj$label) |>
+        filter(age >= 2)
 
       ids <- seq_len(n_ind)
 
@@ -386,39 +406,77 @@ plot_S8 <- function()
         inf_times_list = inf_times_list,
         final_age = stop_age)
 
-      saveRDS(avg_titre_vctr, fn)
+      titre_df <- data.frame(age = 1:80, mean_titre = avg_titre_vctr) |>
+        mutate(sce_id = sce_obj$id,
+               lbl    = sce_obj$label)
 
-    } else avg_titre_vctr <- readRDS(fn)
+      head(pct_inf_age)
 
-    data.frame(age = 1:80, mean_titre = avg_titre_vctr) |>
-      mutate(sce_id = sce_obj$id,
-             lbl    = sce_obj$label)
+      scenario_result <- list(pop_infection_df = pct_inf_age,
+                              pop_titre_df     = titre_df)
+
+      saveRDS(scenario_result, fn)
+
+    } else scenario_result <- readRDS(fn)
+
+    scenario_result
   })
 
   clr_PHL_alt1 <- "#AEB7C9"  # muted lavender-grey (NEW)
   clr_PHL_alt2 <- "#6F8F8C"  # teal-grey
-  clr_PHL_alt3 <- "#B89B6B"  # warm sand
+  clr_PHL_alt3 <- clr_PHL_dgm
+  clr_PHL_alt4 <- "#B89B6B" # warm sand
 
-  ggplot(titre_df |> filter(sce_id > 1), aes(age, mean_titre)) +
-    geom_line(aes(colour   = lbl,
-                  linetype = lbl),
-              linewidth    =  1) +
+  infection_df <- map_df(result_list, "pop_infection_df")
+
+  g_S8 <- ggplot(infection_df  |> filter(sce_id > 1), aes(age, pct)) +
+    geom_line(aes(colour   = lbl),
+              linewidth    =  1,
+              linetype     =  "longdash") +
+    geom_line(data = infection_df |> filter(sce_id == 1), colour = clr_PHL,
+              linewidth    =  1.2) +
+    scale_colour_manual(values = c(clr_PHL_alt1,
+                                   clr_PHL_alt2,
+                                   clr_PHL_alt3,
+                                   clr_PHL_alt4)) +
+    annotate("text", label = "Reinfection", colour = clr_PHL, x = 70, y = 0.1) +
+    guides(colour   = guide_legend(direction = "vertical")) +
+    labs(x = "Age",
+         y = "Probability of infection",
+         colour   = "Lifelong immunity") +
+    theme(legend.position = "inside",
+          legend.position.inside = c(0.5, 0.65),
+          legend.key.width = unit(0.25, "cm"))
+
+  #-----------------------------------------------------------------------------
+
+  titre_df <- map_df(result_list, "pop_titre_df")
+
+  g_S9 <- ggplot(titre_df |> filter(sce_id > 1), aes(age, mean_titre)) +
+    geom_line(aes(colour   = lbl),
+              linewidth    =  1,
+              linetype     =  "longdash") +
     geom_line(data = titre_df |> filter(sce_id == 1), colour = clr_PHL,
               linewidth    =  1.2) +
     scale_colour_manual(values = c(clr_PHL_alt1,
-                                   clr_PHL_alt2, clr_PHL_alt3)) +
-    scale_linetype_manual(values = c("dashed", "11", "dotdash")) +
+                                   clr_PHL_alt2,
+                                   clr_PHL_alt3,
+                                   clr_PHL_alt4)) +
     annotate("text", label = "Reinfection", colour = clr_PHL, x = 60, y = 4.5) +
     scale_y_continuous(limits = c(0, NA)) +
     guides(colour   = guide_legend(direction = "vertical")) +
-    labs(x = "Age", y = "Mean titer (log2)",
-         colour   = "Lifelong immunity",
-         linetype = "Lifelong immunity") +
-    theme(legend.position = c(0.5, 0.25),
-          legend.key.width = unit(1, "cm"))
+    labs(x = "Age",
+         y = expression("Mean titer (" * log[2]^"*" * ")"),
+         colour   = "Lifelong immunity") +
+    theme(legend.position = "inside",
+          legend.position.inside = c(0.45, 0.3),
+          legend.key.width = unit(0.25, "cm"))
+
+  list(g_S8 = g_S8,
+       g_S9 = g_S9)
 }
 
-plot_S9_S10 <- function()
+plot_S10_S11 <- function()
 {
   summary_list <- NMC_get_measurements_summary()
 
@@ -494,7 +552,7 @@ plot_S9_S10 <- function()
 
   summary_df$pred_mean_std <- p2 + 1
 
-  g_S2 <- ggplot(summary_df, aes(seq_inf)) +
+  g_S10 <- ggplot(summary_df, aes(seq_inf)) +
     geom_line(aes(y = pred_mean, linetype = "Unadjusted"), colour = "grey60") +
     geom_line(aes(y = pred_mean_std, linetype = "Assay adjusted"),
               colour = NMC_all) +
@@ -548,7 +606,7 @@ plot_S9_S10 <- function()
   summary_seroneg_df$pred_mean_std <- p3 + 1
 
 
-  g_S3 <- ggplot(summary_df, aes(seq_inf)) +
+  g_S11 <- ggplot(summary_df, aes(seq_inf)) +
     geom_line(aes(y = pred_mean_std, linetype = "All individuals"),
               colour = "grey50",
               position = position_nudge(x = 0.02)) +
@@ -577,11 +635,11 @@ plot_S9_S10 <- function()
       legend.key.width = unit(1.5, "cm")) +
     guides(linetype = guide_legend(override.aes = list(linewidth = 1.2)))
 
-  list(S2 = g_S2,
-       S3 = g_S3)
+  list(S10 = g_S10,
+       S11 = g_S11)
 }
 
-plot_S11 <- function()
+plot_S12 <- function()
 {
   age_df <- map_df(c(100, 1000, 10000, 100000), \(n_ind) {
 
